@@ -7,7 +7,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import android.telephony.PhoneNumberUtils;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -69,7 +69,7 @@ public final class MmsSmsHelper {
 
     /**
      * Converts an array of phone number address strings into the associated contact names, if available in Contacts. If a contact does not exist, the phone number is provided instead
-     *
+     * <p>
      * Note this runs on a separate thread, and your class must implement the ReadableAddressCallback for results to be properly returned
      *
      * @param context
@@ -95,7 +95,8 @@ public final class MmsSmsHelper {
     }
 
     /**
-     * Separate thread to convert addresses (phone numbers) into contact names, if available. Callback returns results
+     * Separate thread to convert addresses (phone numbers) into contact names, if available.
+     * Callback returns results
      */
     private static class ReadableAddressCursor extends AsyncTask<Context, Void, String> {
 
@@ -122,11 +123,18 @@ public final class MmsSmsHelper {
 
                 if (cursor != null && cursor.moveToNext()) {
                     // store the contact name if available
-                    contactNames.add(cursor.getString(0));
+                    address = cursor.getString(0);
+                    contactNames.add(address);
                     cursor.close();
                 } else {
-                    // otherwise, store the number
-                    contactNames.add(address);
+                    // otherwise, store the number, in a consistent format
+                    if (address != null) {
+                        String formatted = PhoneNumberUtils.formatNumber(address, "us");
+                        if (formatted == null) {
+                            formatted = address;
+                        }
+                        contactNames.add(formatted);
+                    }
                 }
             }
 
@@ -142,7 +150,7 @@ public final class MmsSmsHelper {
 
     /**
      * Grabs the phone number addresses associated with the Mms message id and calls getReadableAddressString() to convert the phone numbers into their associated contact name, if available in Contacts. Otherwise, the phone number is returned
-     *
+     * <p>
      * Note this runs on a separate thread, and your class must implement the ReadableAddressCallback for results to be properly returned
      *
      * @param context
@@ -210,6 +218,7 @@ public final class MmsSmsHelper {
 
     /**
      * Debug method for viewing object field values
+     *
      * @param smsObject
      * @param tag
      */
@@ -234,6 +243,7 @@ public final class MmsSmsHelper {
 
     /**
      * Debug method for viewing object field values
+     *
      * @param mmsObject
      * @param tag
      */
