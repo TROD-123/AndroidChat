@@ -13,14 +13,21 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.google.i18n.phonenumbers.NumberParseException;
+import com.google.i18n.phonenumbers.PhoneNumberUtil;
+import com.google.i18n.phonenumbers.Phonenumber;
+
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Helper class for MmsSms handling
  */
 public final class MmsSmsHelper {
+
+    private static final String LOG_TAG = MmsSmsHelper.class.getSimpleName();
 
     // request codes
     public static final int READ_SMS_PERMISSIONS_REQUEST = 1001;
@@ -111,6 +118,7 @@ public final class MmsSmsHelper {
         @Override
         protected String doInBackground(Context... contexts) {
             List<String> contactNames = new ArrayList<>();
+            PhoneNumberUtil phoneUtil = PhoneNumberUtil.getInstance();
 
             for (String address : addresses) {
                 Uri lookupUri = Uri.withAppendedPath(
@@ -129,9 +137,19 @@ public final class MmsSmsHelper {
                 } else {
                     // otherwise, store the number, in a consistent format
                     if (address != null) {
-                        String formatted = PhoneNumberUtils.formatNumber(address, "us");
-                        if (formatted == null) {
-                            formatted = address;
+                        String formatted = address;
+                        if (android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+                            // handle e-mail addresses here
+                        } else {
+                            // otherwise assume address is a phone number
+                            Phonenumber.PhoneNumber number;
+                            try {
+                                number = phoneUtil.parse(address, Locale.getDefault().getCountry());
+                                formatted = phoneUtil.format(number, PhoneNumberUtil.PhoneNumberFormat.NATIONAL);
+                            } catch (NumberParseException e) {
+                                Log.e(LOG_TAG, "NumberParseException was thrown: " + address);
+                                e.printStackTrace();
+                            }
                         }
                         contactNames.add(formatted);
                     }
@@ -158,7 +176,9 @@ public final class MmsSmsHelper {
      * @param callback
      * @param convertToReadable If false, returns the pre-formatted addresses to the callback
      */
-    public static void getAddressFromMms(@NonNull Context context, @NonNull String id, @NonNull ReadableAddressCallback callback, boolean convertToReadable) {
+    public static void getAddressFromMms(@NonNull Context context, @NonNull String id,
+                                         @NonNull ReadableAddressCallback callback,
+                                         boolean convertToReadable) {
         MmsAddressCursor cursor = new MmsAddressCursor(id, callback, convertToReadable);
         cursor.execute(context);
     }
