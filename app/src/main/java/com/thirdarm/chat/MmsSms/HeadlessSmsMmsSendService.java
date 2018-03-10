@@ -1,4 +1,4 @@
-package com.thirdarm.chat.sms;
+package com.thirdarm.chat.MmsSms;
 
 import android.app.Service;
 import android.content.Intent;

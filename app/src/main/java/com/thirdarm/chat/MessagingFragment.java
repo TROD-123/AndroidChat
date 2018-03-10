@@ -14,7 +14,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 
-import com.thirdarm.chat.sms.SmsHelper;
+import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.utils.Utils;
 
 public class MessagingFragment extends Fragment {
@@ -73,10 +73,10 @@ public class MessagingFragment extends Fragment {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
-            case SmsHelper.SEND_SMS_PERMISSIONS_REQUEST:
+            case MmsSmsHelper.SEND_SMS_PERMISSIONS_REQUEST:
                 // upon first granting of send permission
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    SmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
+                    MmsSmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
                 }
         }
     }
@@ -84,7 +84,7 @@ public class MessagingFragment extends Fragment {
     // helper method to send text message
     public void sendSMSTextMessage() {
         if (getPermissionToSendSMS()) {
-            SmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
+            MmsSmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
         } else {
             // code is run in onRequestPermissionsResult
         }
@@ -100,7 +100,7 @@ public class MessagingFragment extends Fragment {
             } else {
                 requestPermissions(
                         new String[]{Manifest.permission.SEND_SMS},
-                        SmsHelper.SEND_SMS_PERMISSIONS_REQUEST
+                        MmsSmsHelper.SEND_SMS_PERMISSIONS_REQUEST
                 );
             }
             return false;

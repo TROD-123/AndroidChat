@@ -1,4 +1,4 @@
-package com.thirdarm.chat.sms;
+package com.thirdarm.chat.MmsSms;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -32,7 +32,7 @@ public class SmsReceiver extends BroadcastReceiver {
                     long timestamp = message.getTimestampMillis();
 
                     // TODO: Need to save down the message to local SMS content provider. This isn't done automatically upon receiving messages
-                    SmsHelper.storeTextMessage(context, messageBody, originatingAddress, timestamp);
+                    MmsSmsHelper.storeTextMessage(context, messageBody, originatingAddress, timestamp);
 
                     // TODO: Need to show notification of incoming message
                     NotificationUtils.createNoficiationReceivedMessage(context, messageBody, originatingAddress, timestamp);

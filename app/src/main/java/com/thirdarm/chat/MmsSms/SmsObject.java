@@ -1,6 +1,4 @@
-package com.thirdarm.chat.sms;
-
-import android.provider.Telephony;
+package com.thirdarm.chat.MmsSms;
 
 /**
  * Created by TROD on 20180304.
