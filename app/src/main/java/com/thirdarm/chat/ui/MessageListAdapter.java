@@ -11,6 +11,7 @@ import android.widget.TextView;
 
 import com.thirdarm.chat.MessageListFragment;
 import com.thirdarm.chat.MmsSms.MmsObject;
+import com.thirdarm.chat.MmsSms.MmsSmsColumns;
 import com.thirdarm.chat.R;
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.MmsSms.SmsObject;
@@ -53,35 +54,36 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         return new MessageListVH(view);
     }
 
+    // TODO: Filter fields to what you actually need
     private void bindSMSView(MessageListVH holder, int position) {
         String initials = String.valueOf(position);
         String address =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_ADDRESS);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_ADDRESS);
         String body =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_BODY);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_BODY);
         String creator = null;
         long dateReceived =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_RECEIVED);
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_RECEIVED);
         long dateSent =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_SENT);
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_SENT);
         int errorCode =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_ERROR_CODE);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_ERROR_CODE);
         boolean locked =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_LOCKED) == 1;
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_LOCKED) == 1;
         int personSenderId =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_PERSON_SENDER_ID);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_PERSON_SENDER_ID);
         int protocolId = -1;
         boolean read =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_READ) == 1;
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_READ) == 1;
         boolean seen = false;
         String serviceCenter =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_SERVICE_CENTER);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_SERVICE_CENTER);
         String subject =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_SUBJECT);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_SUBJECT);
         int threadId =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_THREAD_ID);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_THREAD_ID);
         int type =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_TYPE);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_TYPE);
 
         // This will be updated on item itself once data is available
         MmsSmsHelper.getReadableAddressString(mContext, new String[]{address},
@@ -91,6 +93,7 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 errorCode, locked, personSenderId, protocolId, read, seen, serviceCenter,
                 subject, threadId, type);
 
+        // if the mesasge was in the outbox, then the user is the sender
         if (type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_OUTBOX ||
                 type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_SENT) {
             body = "You: " + body;
@@ -102,65 +105,69 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 address,
                 body,
                 Utils.convertMillisToReadableDateTime(
-                        mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_NORMALIZED))
+                        mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
         );
     }
 
+    // TODO: Filter fields to what you actually need
+    // TODO: Show MMS
     private void bindMMSView(MessageListVH holder, int position) {
         String initials = String.valueOf(position);
         int contentClass =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_CONTENT_CLASS);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_CONTENT_CLASS);
         String contentLocation =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_CONTENT_LOCATION);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_CONTENT_LOCATION);
         String contentType =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_CONTENT_TYPE);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_CONTENT_TYPE);
         String creator = null;
         long dateReceived =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_RECEIVED) *
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_RECEIVED) *
                 MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
         long dateSent =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_SENT) *
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_SENT) *
                 MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
         long expiryTime =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_EXPIRY);
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_EXPIRY);
         boolean locked =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_LOCKED) == 1;
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_LOCKED) == 1;
         int messageBox =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_MESSAGE_BOX);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_MESSAGE_BOX);
         String messageClass =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_MESSAGE_CLASS);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_MESSAGE_CLASS);
         String messageId =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_MESSAGE_ID);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_MESSAGE_ID);
         int messageSize =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_MESSAGE_SIZE);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_MESSAGE_SIZE);
         int typeMessage =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_MESSAGE_TYPE);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_MESSAGE_TYPE);
         int mmsVersion =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_MMS_VERSION);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_MMS_VERSION);
         int priority =
                 mCursor
-                        .getInt(MessageListFragment.INDEX_MESSAGES_PRIORITY);
-        boolean read = mCursor.getInt(MessageListFragment.INDEX_MESSAGES_READ) == 1;
+                        .getInt(MmsSmsColumns.INDEX_MESSAGES_PRIORITY);
+        boolean read = mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_READ) == 1;
         boolean seen = false;
         int status =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_STATUS);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_STATUS);
         String subject =
-                mCursor.getString(MessageListFragment.INDEX_MESSAGES_SUBJECT);
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_SUBJECT);
         int subjectCharset =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_SUBJECT_CHARSET);
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_SUBJECT_CHARSET);
         boolean textOnly =
-                mCursor.getInt(MessageListFragment.INDEX_MESSAGES_TEXT_ONLY) == 1;
+                mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_TEXT_ONLY) == 1;
         long threadId =
-                mCursor.getLong(MessageListFragment.INDEX_MESSAGES_THREAD_ID);
+                mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_THREAD_ID);
+        String baseColumnId =
+                mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_ID);
 
-        // This will be updated on item itself once data is available
-        MmsSmsHelper.getAddressFromMms(mContext, mCursor.
-                getString(MessageListFragment.INDEX_MESSAGES_ID), holder, true);
+        // This will be updated on item itself once data is available. INDEX_MESSAGES_ID is the base column _id
+        MmsSmsHelper.getAddressFromMms(mContext, baseColumnId, holder,
+                true, false);
 
         MmsObject mmsObject = new MmsObject(contentClass, contentLocation, contentType, creator,
                 dateReceived, dateSent, expiryTime, locked, messageBox, messageClass, messageId,
                 messageSize, typeMessage, mmsVersion, priority, read, seen, status, subject,
-                subjectCharset, textOnly, threadId);
+                subjectCharset, textOnly, threadId, baseColumnId);
 
         holder.bindMms(
                 mmsObject,
@@ -168,7 +175,7 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 "",
                 contentType,
                 Utils.convertMillisToReadableDateTime(
-                        mCursor.getLong(MessageListFragment.INDEX_MESSAGES_DATE_NORMALIZED))
+                        mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
         );
     }
 
@@ -177,7 +184,7 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
 
         if (mCursor.moveToPosition(position)) {
             String messageType =
-                    mCursor.getString(MessageListFragment.INDEX_MESSAGES_CONTENT_TYPE);
+                    mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_CONTENT_TYPE);
             if ("application/vnd.wap.multipart.related".equals(messageType)) {
                 // message is MMS
                 bindMMSView(holder, position);

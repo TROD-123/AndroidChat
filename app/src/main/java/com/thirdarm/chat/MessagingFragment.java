@@ -1,13 +1,25 @@
 package com.thirdarm.chat;
 
 import android.Manifest;
+import android.content.ContentUris;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
+import android.support.v4.app.LoaderManager;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,14 +27,24 @@ import android.widget.Button;
 import android.widget.EditText;
 
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
+import com.thirdarm.chat.ui.MessagingAdapter;
 import com.thirdarm.chat.utils.Utils;
 
-public class MessagingFragment extends Fragment {
+public class MessagingFragment extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    String mPhoneNo, mMessage;
+    private static final String LOG_TAG = MessagingFragment.class.getSimpleName();
 
-    EditText mEt_Message;
+    String mMessageOutgoing, mAddressNamesOutgoing;
+    String[] mAddressNumbersOutgoing;
+    long mThreadId;
+
+    RecyclerView mRv_messages;
+    MessagingAdapter mMessagingAdapter;
+
+    EditText mEt_messageOutgoing;
     Button mButton_send;
+
+    private static final int ID_CONVERSATIONS_LOADER = 102;
 
     public MessagingFragment() {
     }
@@ -32,24 +54,59 @@ public class MessagingFragment extends Fragment {
                              Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_messaging, container, false);
 
-        mPhoneNo = "8182820973";
+        // set up recyclerview
 
-        mEt_Message = (EditText) view.findViewById(R.id.messaging_message_edittext);
+        mRv_messages = (RecyclerView) view.findViewById(R.id.messaging_conversations_recyclerview);
+        mMessagingAdapter = new MessagingAdapter(getContext());
+
+        mRv_messages.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.VERTICAL, false));
+        mRv_messages.setAdapter(mMessagingAdapter);
+
+
+        // load up initial data from intent
+
+        Intent intent = getActivity().getIntent();
+        if (intent != null) {
+            Bundle args = new Bundle();
+            if (intent.hasExtra(MmsSmsHelper.MESSAGING_THREAD_KEY)) {
+                mThreadId = intent.getLongExtra(
+                        MmsSmsHelper.MESSAGING_THREAD_KEY, MmsSmsHelper.DEFAULT_MESSAGING_THREAD_ID);
+                if (mThreadId != MmsSmsHelper.DEFAULT_MESSAGING_THREAD_ID) {
+                    args.putLong(MmsSmsHelper.MESSAGING_THREAD_KEY, mThreadId);
+                }
+            } else {
+                Log.e(LOG_TAG, "The thread id is null!");
+            }
+
+            if (intent.hasExtra(MmsSmsHelper.MESSAGING_THREAD_ADDRESS_NUMBERS_OUTGOING_KEY)) {
+                mAddressNumbersOutgoing = intent.getStringArrayExtra(
+                        MmsSmsHelper.MESSAGING_THREAD_ADDRESS_NUMBERS_OUTGOING_KEY);
+            } else {
+                Log.e(LOG_TAG, "There are no addresses!");
+            }
+            initializeLoading(args);
+        }
+
+
+        // set-up outgoing message container
+        // TODO: Implement outgoing message functionality
+
+        mEt_messageOutgoing = (EditText) view.findViewById(R.id.messaging_message_edittext);
 
         mButton_send = (Button) view.findViewById(R.id.messaging_button_send);
         mButton_send.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                mMessage = mEt_Message.getText().toString();
+                mMessageOutgoing = mEt_messageOutgoing.getText().toString();
 
-                if (checkIfNumberMessageEmpty(mPhoneNo, mMessage)) {
+                if (checkIfNumberMessageEmpty("", mMessageOutgoing)) {
                     sendSMSTextMessage();
                 }
             }
         });
 
         // disable the send button if message field is empty
-        mEt_Message.addTextChangedListener(new TextWatcher() {
+        mEt_messageOutgoing.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
 
@@ -65,7 +122,7 @@ public class MessagingFragment extends Fragment {
                 enableDisableSendButton(editable);
             }
         });
-        enableDisableSendButton(mEt_Message.getText());
+        enableDisableSendButton(mEt_messageOutgoing.getText());
 
         return view;
     }
@@ -75,16 +132,37 @@ public class MessagingFragment extends Fragment {
         switch (requestCode) {
             case MmsSmsHelper.SEND_SMS_PERMISSIONS_REQUEST:
                 // upon first granting of send permission
+                // TODO: Implement sendTextMessage()
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    MmsSmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
+                    MmsSmsHelper.sendTextMessage(getActivity(), null, mMessageOutgoing);
                 }
         }
     }
 
+    /**
+     * Helper method to start the loader and set the action bar title
+     * @param bundle
+     */
+    private void initializeLoading(Bundle bundle) {
+        if (bundle != null && bundle.containsKey(MmsSmsHelper.MESSAGING_THREAD_KEY)) {
+            // start the loader if thread id is available
+            getActivity().getSupportLoaderManager().initLoader(ID_CONVERSATIONS_LOADER, bundle, this);
+        }
+        if (mAddressNumbersOutgoing != null && mAddressNumbersOutgoing.length > 0) {
+            // set the action bar title if addresses are available
+            mAddressNamesOutgoing = MmsSmsHelper.getReadableAddressString(getContext(),
+                    mAddressNumbersOutgoing, null, true);
+            ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle(mAddressNamesOutgoing);
+        } else {
+            Log.e(LOG_TAG, "There are no outgoing addresses!");
+        }
+    }
+
     // helper method to send text message
+    // TODO: Implement to support multiple outgoing addresses
     public void sendSMSTextMessage() {
         if (getPermissionToSendSMS()) {
-            MmsSmsHelper.sendTextMessage(getActivity(), mPhoneNo, mMessage);
+            MmsSmsHelper.sendTextMessage(getActivity(), null, mMessageOutgoing);
         } else {
             // code is run in onRequestPermissionsResult
         }
@@ -128,5 +206,45 @@ public class MessagingFragment extends Fragment {
         } else {
             mButton_send.setEnabled(true);
         }
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+        switch (id) {
+            case ID_CONVERSATIONS_LOADER:
+                long threadId = args.getLong(MmsSmsHelper.MESSAGING_THREAD_KEY);
+
+                Uri baseMessageListUri = Uri.parse("content://mms-sms/conversations");
+                Uri messageThreadUri = ContentUris.withAppendedId(baseMessageListUri, threadId);
+
+                String sortOrder = MmsSmsHelper.COLUMN_NORMALIZED_DATE + " asc";
+
+                // TODO: Pass in proper projection array, containing columns you actually need
+                return new CursorLoader(
+                        getContext(),
+                        messageThreadUri,
+                        new String[] {"normalized_date", "body", "address", "m_type", "person", "type"},
+                        null,
+                        null,
+                        sortOrder
+                );
+
+            default:
+                throw new RuntimeException("Loader not implemented: " + id);
+        }    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+        if (data != null && data.getCount() > 0) {
+            mMessagingAdapter.swapCursor(data);
+            mRv_messages.scrollToPosition(data.getCount() - 1);
+        } else {
+            Log.e(LOG_TAG, "The cursor is null!");
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        mMessagingAdapter.swapCursor(null);
     }
 }

@@ -1,13 +1,14 @@
 package com.thirdarm.chat.MmsSms;
 
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
-import android.telephony.PhoneNumberUtils;
+import android.support.annotation.Nullable;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -38,12 +39,21 @@ public final class MmsSmsHelper {
     public static final String COLUMN_NORMALIZED_DATE = "normalized_date";
     public static final int DATE_NORMALIZER_CONSTANT = 1000;
 
+    // keys
+    public static final String MESSAGING_THREAD_KEY = "messaging-thread-id";
+    public static final String MESSAGING_THREAD_ADDRESS_NUMBERS_OUTGOING_KEY =
+            "messaging-thread-address-numbers-outgoing-key";
+
+    // default values
+    public static final long DEFAULT_MESSAGING_THREAD_ID = -1L;
+
 
     private MmsSmsHelper() {
     }
 
     /**
      * Sends a text message while displaying a status toast
+     * TODO: Confirm functionality
      *
      * @param context
      * @param phoneNo
@@ -84,7 +94,7 @@ public final class MmsSmsHelper {
      * @param callback
      * @return
      */
-    public static String getReadableAddressString(@NonNull Context context, @NonNull String[] addresses, @NonNull ReadableAddressCallback callback, boolean runOnMainThread) {
+    public static String getReadableAddressString(@NonNull Context context, @NonNull String[] addresses, @Nullable ReadableAddressCallback callback, boolean runOnMainThread) {
         ReadableAddressCursor cursor = new ReadableAddressCursor(addresses, callback);
         if (runOnMainThread) {
             return cursor.doInBackground(context);
@@ -104,6 +114,7 @@ public final class MmsSmsHelper {
     /**
      * Separate thread to convert addresses (phone numbers) into contact names, if available.
      * Callback returns results
+     * TODO: Clean this up. Use a loader?
      */
     private static class ReadableAddressCursor extends AsyncTask<Context, Void, String> {
 
@@ -127,7 +138,8 @@ public final class MmsSmsHelper {
                 );
                 String[] columns = new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME};
 
-                Cursor cursor = contexts[0].getContentResolver().query(lookupUri, columns, null, null, null);
+                Cursor cursor = contexts[0].getContentResolver().query(lookupUri, columns,
+                        null, null, null);
 
                 if (cursor != null && cursor.moveToNext()) {
                     // store the contact name if available
@@ -176,32 +188,40 @@ public final class MmsSmsHelper {
      * @param callback
      * @param convertToReadable If false, returns the pre-formatted addresses to the callback
      */
-    public static void getAddressFromMms(@NonNull Context context, @NonNull String id,
-                                         @NonNull ReadableAddressCallback callback,
-                                         boolean convertToReadable) {
-        MmsAddressCursor cursor = new MmsAddressCursor(id, callback, convertToReadable);
-        cursor.execute(context);
+    public static String[] getAddressFromMms(@NonNull Context context, @NonNull String id,
+                                           @Nullable ReadableAddressCallback callback,
+                                           boolean convertToReadable, boolean runOnMainThread) {
+        MmsAddressCursor cursor = new MmsAddressCursor(id, callback, convertToReadable, runOnMainThread);
+        if (runOnMainThread) {
+            return cursor.doInBackground(context);
+        } else {
+            cursor.execute(context);
+            return null;
+        }
     }
 
     /**
      * Separate thread to collect phone number addresses from the associated Mms message id. Callback returns results
+     * TODO: Clean this up. Use a loader?
      */
-    private static class MmsAddressCursor extends AsyncTask<Context, Void, String> {
+    private static class MmsAddressCursor extends AsyncTask<Context, Void, String[]> {
 
         String id;
         ReadableAddressCallback callback;
-        boolean convertToReadable;
+        boolean convertToReadable, runOnMainThread;
 
         List<String> numbers = new ArrayList<>();
 
-        MmsAddressCursor(String id, ReadableAddressCallback callback, boolean convertToReadable) {
+        MmsAddressCursor(String id, ReadableAddressCallback callback, boolean convertToReadable,
+                         boolean runOnMainThread) {
             this.id = id;
             this.callback = callback;
             this.convertToReadable = convertToReadable;
+            this.runOnMainThread = runOnMainThread;
         }
 
         @Override
-        protected String doInBackground(Context... contexts) {
+        protected String[] doInBackground(Context... contexts) {
             // use the msg_id to grab address info
             Uri lookupUri = Uri.parse(MessageFormat.format("content://mms/{0}/addr", id));
             String selection = "msg_id = " + id;
@@ -221,18 +241,12 @@ public final class MmsSmsHelper {
             }
 
             if (convertToReadable) {
-                getReadableAddressString(contexts[0], numbers.toArray(new String[]{}), callback, false);
+                getReadableAddressString(contexts[0], numbers.toArray(new String[]{}), callback,
+                        runOnMainThread);
                 return null;
             } else {
-                return TextUtils.join(", ", numbers);
+                return numbers.toArray(new String[]{});
             }
-        }
-
-        @Override
-        protected void onPostExecute(String s) {
-            // only called if convertToReadable is false
-            super.onPostExecute(s);
-            callback.returnReadableAddress(s);
         }
     }
 

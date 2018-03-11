@@ -28,11 +28,12 @@ public class MmsObject {
     private int subjectCharset;
     private boolean textOnly;
     private long threadId;
+    private String baseColumnId;
 
     public MmsObject() {
     }
 
-    public MmsObject(int contentClass, String contentLocation, String contentType, String creator, long dateReceived, long dateSent, long expiryTime, boolean locked, int messageBox, String messageClass, String messageId, int messageSize, int messageType, int mmsVersion, int priority, boolean read, boolean seen, int status, String subject, int subjectCharset, boolean textOnly, long threadId) {
+    public MmsObject(int contentClass, String contentLocation, String contentType, String creator, long dateReceived, long dateSent, long expiryTime, boolean locked, int messageBox, String messageClass, String messageId, int messageSize, int messageType, int mmsVersion, int priority, boolean read, boolean seen, int status, String subject, int subjectCharset, boolean textOnly, long threadId, String baseColumnId) {
         this.contentClass = contentClass;
         this.contentLocation = contentLocation;
         this.contentType = contentType;
@@ -55,6 +56,7 @@ public class MmsObject {
         this.subjectCharset = subjectCharset;
         this.textOnly = textOnly;
         this.threadId = threadId;
+        this.baseColumnId = baseColumnId;
     }
 
     public int getContentClass() {
@@ -231,5 +233,13 @@ public class MmsObject {
 
     public void setThreadId(long threadId) {
         this.threadId = threadId;
+    }
+
+    public String getBaseColumnId() {
+        return baseColumnId;
+    }
+
+    public void setBaseColumnId(String baseColumnId) {
+        this.baseColumnId = baseColumnId;
     }
 }

@@ -1,12 +1,11 @@
 package com.thirdarm.chat;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.BaseColumns;
-import android.provider.Telephony;
 import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.LoaderManager;
@@ -15,11 +14,13 @@ import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.thirdarm.chat.MmsSms.MmsObject;
+import com.thirdarm.chat.MmsSms.MmsSmsColumns;
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.MmsSms.SmsObject;
 import com.thirdarm.chat.ui.MessageListAdapter;
@@ -35,136 +36,7 @@ public class MessageListFragment extends Fragment implements
     RecyclerView rv_messageList;
     MessageListAdapter messageListAdapter;
 
-    private static final int ID_SMS_HISTORY_LOADER = 101;
-
-    // MmsSms base columns - for conversation use (rolled up)
-    // TODO: Does not contain group convos. Does not contain MMS
-    public static final String[] MAIN_MESSAGES_PROJECTION = {
-            // COMMON MMS AND SMS COLUMNS
-            BaseColumns._ID,
-            BaseColumns._ID, // for categorizing mms vs sms messages
-            MmsSmsHelper.COLUMN_NORMALIZED_DATE, // for fixing MMS dates
-            Telephony.TextBasedSmsColumns.DATE, // incorrect for MMS
-            Telephony.TextBasedSmsColumns.DATE_SENT, // incorrect for MMS
-            Telephony.TextBasedSmsColumns.LOCKED, // MMS OK
-            Telephony.TextBasedSmsColumns.READ, // MMS OK
-            Telephony.TextBasedSmsColumns.SUBJECT, // MMS OK
-            Telephony.TextBasedSmsColumns.THREAD_ID, // MMS OK
-
-            // SMS COLUMNS ONLY
-            Telephony.TextBasedSmsColumns.ADDRESS, // null for MMS
-            Telephony.TextBasedSmsColumns.BODY, // null for MMS
-            Telephony.TextBasedSmsColumns.ERROR_CODE, // null for MMS
-            Telephony.TextBasedSmsColumns.PERSON, // null for MMS
-            Telephony.TextBasedSmsColumns.SERVICE_CENTER, // null for MMS
-            Telephony.TextBasedSmsColumns.TYPE, // null for MMS
-
-            // MMS COLUMNS ONLY
-            Telephony.BaseMmsColumns.CONTENT_CLASS,
-            Telephony.BaseMmsColumns.CONTENT_LOCATION,
-            Telephony.BaseMmsColumns.CONTENT_TYPE,
-            Telephony.BaseMmsColumns.EXPIRY,
-            Telephony.BaseMmsColumns.MESSAGE_BOX,
-            Telephony.BaseMmsColumns.MESSAGE_CLASS,
-            Telephony.BaseMmsColumns.MESSAGE_ID,
-            Telephony.BaseMmsColumns.MESSAGE_SIZE,
-            Telephony.BaseMmsColumns.MESSAGE_TYPE,
-            Telephony.BaseMmsColumns.MMS_VERSION,
-            Telephony.BaseMmsColumns.PRIORITY,
-            Telephony.BaseMmsColumns.STATUS,
-            Telephony.BaseMmsColumns.SUBJECT_CHARSET,
-            Telephony.BaseMmsColumns.TEXT_ONLY,
-            BaseColumns._ID
-    };
-
-    public static final int INDEX_MESSAGES_ID = 0;
-    public static final int INDEX_MESSAGES_TYPE_DISCRIMINATOR = 1;
-    public static final int INDEX_MESSAGES_DATE_NORMALIZED = 2;
-    public static final int INDEX_MESSAGES_DATE_RECEIVED = 3;
-    public static final int INDEX_MESSAGES_DATE_SENT = 4;
-    public static final int INDEX_MESSAGES_LOCKED = 5;
-    public static final int INDEX_MESSAGES_READ = 6;
-    public static final int INDEX_MESSAGES_SUBJECT = 7;
-    public static final int INDEX_MESSAGES_THREAD_ID = 8;
-
-    public static final int INDEX_MESSAGES_ADDRESS = 9;
-    public static final int INDEX_MESSAGES_BODY = 10;
-    public static final int INDEX_MESSAGES_ERROR_CODE = 11;
-    public static final int INDEX_MESSAGES_PERSON_SENDER_ID = 12;
-    public static final int INDEX_MESSAGES_SERVICE_CENTER = 13;
-    public static final int INDEX_MESSAGES_TYPE = 14;
-
-    public static final int INDEX_MESSAGES_CONTENT_CLASS = 15;
-    public static final int INDEX_MESSAGES_CONTENT_LOCATION = 16;
-    public static final int INDEX_MESSAGES_CONTENT_TYPE = 17;
-    public static final int INDEX_MESSAGES_EXPIRY = 18;
-    public static final int INDEX_MESSAGES_MESSAGE_BOX = 19;
-    public static final int INDEX_MESSAGES_MESSAGE_CLASS = 20;
-    public static final int INDEX_MESSAGES_MESSAGE_ID = 21;
-    public static final int INDEX_MESSAGES_MESSAGE_SIZE = 22;
-    public static final int INDEX_MESSAGES_MESSAGE_TYPE = 23;
-    public static final int INDEX_MESSAGES_MMS_VERSION = 24;
-    public static final int INDEX_MESSAGES_PRIORITY = 25;
-    public static final int INDEX_MESSAGES_STATUS = 26;
-    public static final int INDEX_MESSAGES_SUBJECT_CHARSET = 27;
-    public static final int INDEX_MESSAGES_TEXT_ONLY = 28;
-
-    // sms base columns
-    public static final String[] SMS_MESSAGES_PROJECTION = {
-            Telephony.TextBasedSmsColumns.ADDRESS,
-            Telephony.TextBasedSmsColumns.BODY,
-            Telephony.TextBasedSmsColumns.CREATOR,
-            Telephony.TextBasedSmsColumns.DATE,
-            Telephony.TextBasedSmsColumns.DATE_SENT,
-            Telephony.TextBasedSmsColumns.ERROR_CODE,
-            Telephony.TextBasedSmsColumns.LOCKED,
-            Telephony.TextBasedSmsColumns.PERSON,
-            Telephony.TextBasedSmsColumns.PROTOCOL,
-            Telephony.TextBasedSmsColumns.READ,
-            Telephony.TextBasedSmsColumns.SEEN,
-            Telephony.TextBasedSmsColumns.SERVICE_CENTER,
-            Telephony.TextBasedSmsColumns.SUBJECT,
-            Telephony.TextBasedSmsColumns.THREAD_ID,
-            Telephony.TextBasedSmsColumns.TYPE
-    };
-
-    public static final int INDEX_SMS_MESSAGES_ADDRESS = 0;
-    public static final int INDEX_SMS_MESSAGES_BODY = 1;
-    public static final int INDEX_SMS_MESSAGES_CREATOR = 2;
-    public static final int INDEX_SMS_MESSAGES_DATE_RECEIVED = 3;
-    public static final int INDEX_SMS_MESSAGES_DATE_SENT = 4;
-    public static final int INDEX_SMS_MESSAGES_ERROR_CODE = 5;
-    public static final int INDEX_SMS_MESSAGES_LOCKED = 6;
-    public static final int INDEX_SMS_MESSAGES_PERSON_SENDER_ID = 7;
-    public static final int INDEX_SMS_MESSAGES_PROTOCOL_ID = 8;
-    public static final int INDEX_SMS_MESSAGES_READ = 9;
-    public static final int INDEX_SMS_MESSAGES_SEEN = 10;
-    public static final int INDEX_SMS_MESSAGES_SERVICE_CENTER = 11;
-    public static final int INDEX_SMS_MESSAGES_SUBJECT = 12;
-    public static final int INDEX_SMS_MESSAGES_THREAD_ID = 13;
-    public static final int INDEX_SMS_MESSAGES_TYPE = 14;
-
-    // mms base columns
-    public static final String[] MMS_MESSAGES_PROJECTION = {
-            Telephony.BaseMmsColumns.DATE
-    };
-
-    public static final int INDEX_MMS_MESSAGES_ADDRESS = 0;
-    public static final int INDEX_MMS_MESSAGES_BODY = 1;
-    public static final int INDEX_MMS_MESSAGES_CREATOR = 2;
-    public static final int INDEX_MMS_MESSAGES_DATE_RECEIVED = 3;
-    public static final int INDEX_MMS_MESSAGES_DATE_SENT = 4;
-    public static final int INDEX_MMS_MESSAGES_ERROR_CODE = 5;
-    public static final int INDEX_MMS_MESSAGES_LOCKED = 6;
-    public static final int INDEX_MMS_MESSAGES_PERSON_SENDER_ID = 7;
-    public static final int INDEX_MMS_MESSAGES_PROTOCOL_ID = 8;
-    public static final int INDEX_MMS_MESSAGES_READ = 9;
-    public static final int INDEX_MMS_MESSAGES_SEEN = 10;
-    public static final int INDEX_MMS_MESSAGES_SERVICE_CENTER = 11;
-    public static final int INDEX_MMS_MESSAGES_SUBJECT = 12;
-    public static final int INDEX_MMS_MESSAGES_THREAD_ID = 13;
-    public static final int INDEX_MMS_MESSAGES_TYPE = 14;
-
+    private static final int ID_CONVERSATIONS_LIST_LOADER = 101;
 
     public MessageListFragment() {
         // Required empty public constructor
@@ -174,13 +46,26 @@ public class MessageListFragment extends Fragment implements
     public void onClick(SmsObject smsObject) {
         MmsSmsHelper.logSmsObjectFields(smsObject, LOG_TAG + ": Sms log");
 
-        //Intent intent = new Intent(getActivity(), ComposeMessageActivity.class);
-        //startActivity(intent);
+        long threadId = smsObject.getThreadId();
+        String[] addressNumbersOutgoing = new String[]{smsObject.getAddress()};
+        startMessagingActivity(threadId, addressNumbersOutgoing);
     }
 
     @Override
     public void onClick(MmsObject mmsObject) {
         MmsSmsHelper.logMmsObjectFields(mmsObject, LOG_TAG + ": Mms log");
+
+        long threadId = mmsObject.getThreadId();
+        String[] addressNumbersOutgoing = MmsSmsHelper.getAddressFromMms(getContext(),
+                mmsObject.getBaseColumnId(), null, false, true);
+        startMessagingActivity(threadId, addressNumbersOutgoing);
+    }
+
+    private void startMessagingActivity(long threadId, String[] addressNumbersOutgoing) {
+        Intent intent = new Intent(getActivity(), ComposeMessageActivity.class);
+        intent.putExtra(MmsSmsHelper.MESSAGING_THREAD_KEY, threadId);
+        intent.putExtra(MmsSmsHelper.MESSAGING_THREAD_ADDRESS_NUMBERS_OUTGOING_KEY, addressNumbersOutgoing);
+        startActivity(intent);
     }
 
     @Override
@@ -212,7 +97,7 @@ public class MessageListFragment extends Fragment implements
             case MmsSmsHelper.READ_SMS_PERMISSIONS_REQUEST:
                 // upon first granting of send permission
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    getActivity().getSupportLoaderManager().initLoader(ID_SMS_HISTORY_LOADER, null, this);
+                    getActivity().getSupportLoaderManager().initLoader(ID_CONVERSATIONS_LIST_LOADER, null, this);
                 }
                 break;
         }
@@ -221,7 +106,7 @@ public class MessageListFragment extends Fragment implements
     // helper method to get text messages
     public void loadSMSMessages() {
         if (getPermissionToReadSMS()) {
-            getActivity().getSupportLoaderManager().initLoader(ID_SMS_HISTORY_LOADER, null, this);
+            getActivity().getSupportLoaderManager().initLoader(ID_CONVERSATIONS_LIST_LOADER, null, this);
         } else {
             // code is run in onRequestPermissionsResult
         }
@@ -282,16 +167,15 @@ public class MessageListFragment extends Fragment implements
     @Override
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
         switch (id) {
-            case ID_SMS_HISTORY_LOADER:
-                // Looks at only all text-based SMS messages (TODO: join it with MMS messages as well)
-                Uri messageListUri = Uri.parse("content://mms-sms/conversations"); // We can use Telephony.MmsSms.CONTENT_CONVERSATIONS_URI for the message list. (TODO: still need to figure out how to show both MMS and SMS together for the compose message screen)
+            case ID_CONVERSATIONS_LIST_LOADER:
+                Uri messageListUri = Uri.parse("content://mms-sms/conversations");
 
                 String sortOrder = MmsSmsHelper.COLUMN_NORMALIZED_DATE + " desc";
 
                 return new CursorLoader(
                         getContext(),
                         messageListUri,
-                        MAIN_MESSAGES_PROJECTION,
+                        MmsSmsColumns.MAIN_MESSAGES_PROJECTION,
                         null,
                         null,
                         sortOrder
@@ -304,12 +188,11 @@ public class MessageListFragment extends Fragment implements
 
     @Override
     public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
-        if (data != null) {
-            Utils.showToast(getContext(), "Length: " + data.getCount());
+        if (data != null && data.getCount() > 0) {
+            messageListAdapter.swapCursor(data);
         } else {
-            Utils.showToast(getContext(), "Cursor is null");
+            Log.e(LOG_TAG, "The cursor is null!");
         }
-        messageListAdapter.swapCursor(data);
     }
 
     @Override
