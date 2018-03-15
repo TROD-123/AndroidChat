@@ -168,7 +168,7 @@ public class MessageListFragment extends Fragment implements
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
         switch (id) {
             case ID_CONVERSATIONS_LIST_LOADER:
-                Uri messageListUri = Uri.parse("content://mms-sms/conversations");
+                Uri messageListUri = Uri.parse("content://mms-sms/conversations"); // this is the same as Telephony.MmsSms.CONTENT_CONVERSATIONS_URI
 
                 String sortOrder = MmsSmsHelper.COLUMN_NORMALIZED_DATE + " desc";
 

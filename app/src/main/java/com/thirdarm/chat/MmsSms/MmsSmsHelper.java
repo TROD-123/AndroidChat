@@ -4,9 +4,11 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
+import android.provider.Telephony;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.telephony.SmsManager;
@@ -18,6 +20,10 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +50,10 @@ public final class MmsSmsHelper {
     public static final String MESSAGING_THREAD_ADDRESS_NUMBERS_OUTGOING_KEY =
             "messaging-thread-address-numbers-outgoing-key";
 
+    // status codes
+    public static final int MESSAGE_DELIVERY_STATUS_SUCCESS = 0;
+    public static final int MESSAGE_DELIVERY_STATUS_FAILURE = 1;
+
     // default values
     public static final long DEFAULT_MESSAGING_THREAD_ID = -1L;
 
@@ -53,23 +63,28 @@ public final class MmsSmsHelper {
 
     /**
      * Sends a text message while displaying a status toast
-     * TODO: Confirm functionality
+     * TODO: Allow sending to multiple addresses
+     * TODO: Allow MMS functionality
+     * TODO: Need to store sent messages to internal content provider (is it outbox?)
      *
      * @param context
      * @param phoneNo
      * @param msg
      */
-    public static void sendTextMessage(Context context, String phoneNo, String msg) {
+    public static void sendTextMessage(Context context, String phoneNo, String msg,
+                                       MessageDeliveryCallbacks callbacks) {
         try {
             SmsManager smsManager = SmsManager.getDefault();
             smsManager.sendTextMessage(phoneNo, null, msg, null, null);
-            Toast.makeText(context, "Message Sent",
-                    Toast.LENGTH_LONG).show();
+            callbacks.onMessageSent(MESSAGE_DELIVERY_STATUS_SUCCESS);
         } catch (Exception ex) {
-            Toast.makeText(context, ex.toString(),
-                    Toast.LENGTH_LONG).show();
             ex.printStackTrace();
+            callbacks.onMessageSent(MESSAGE_DELIVERY_STATUS_FAILURE);
         }
+    }
+
+    public interface MessageDeliveryCallbacks {
+        void onMessageSent(int statusCode);
     }
 
     /**
@@ -189,8 +204,8 @@ public final class MmsSmsHelper {
      * @param convertToReadable If false, returns the pre-formatted addresses to the callback
      */
     public static String[] getAddressFromMms(@NonNull Context context, @NonNull String id,
-                                           @Nullable ReadableAddressCallback callback,
-                                           boolean convertToReadable, boolean runOnMainThread) {
+                                             @Nullable ReadableAddressCallback callback,
+                                             boolean convertToReadable, boolean runOnMainThread) {
         MmsAddressCursor cursor = new MmsAddressCursor(id, callback, convertToReadable, runOnMainThread);
         if (runOnMainThread) {
             return cursor.doInBackground(context);
@@ -230,6 +245,7 @@ public final class MmsSmsHelper {
             Cursor cursor = contexts[0].getContentResolver().query(lookupUri, columns, selection, null, null);
 
             if (cursor != null) {
+                Log.d(LOG_TAG, "Cursor size for the id " + id + ": " + cursor.getCount());
                 // store all available addresses
                 while (cursor.moveToNext()) {
                     String t = cursor.getString(0);
@@ -248,6 +264,103 @@ public final class MmsSmsHelper {
                 return numbers.toArray(new String[]{});
             }
         }
+    }
+
+    // TODO: Need to split into separate methods based on MIMEtype
+    public static String getMmsData(Context context, String id, int messagebox) {
+        String[] addresses = getAddressFromMms(context, id, null, false, true);
+        String address = "";
+        if (addresses != null && addresses.length > 0) {
+            address = getReadableAddressString(context, new String[]{addresses[0]}, null, true);
+        }
+        Uri lookupUri = Uri.parse("content://mms/part");
+        String selection = Telephony.Mms.Part.MSG_ID + " = ? ";
+        String[] selectionArgs = new String[]{id};
+        Cursor cursor = context.getContentResolver().query(
+                lookupUri,
+                null,
+                selection,
+                selectionArgs,
+                null
+        );
+        if (cursor != null && cursor.moveToFirst()) {
+            String partId = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._ID));
+            String type = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
+
+            switch (type) {
+                // use MIME type to check for desired format
+                case "text/plain":
+                    // type is text
+                    String data = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._DATA));
+                    String body;
+                    if (data != null) {
+                        // TODO: don't know what this is for
+                        body = "There is text"; //getMmsText(context, partId);
+                    } else {
+                        // text is stored in cursor. access it directly
+                        if (messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_OUTBOX ||
+                                messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_SENT) {
+                            // Append "You" if user is the sender. Otherwise, append the address (sender address is the first address in array)
+                            body = "You: ";
+                        } else {
+                            body = address + ": ";
+                        }
+                        body += cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.TEXT));
+                    }
+                    return body;
+                case "image/jpeg":
+                case "image/bmp":
+                case "image.gif":
+                case "image/jpg":
+                case "image/png":
+                    // type is image
+                    //Bitmap bitmap = getMmsImage(partId);
+                    return "Image";
+                case "audio":
+                    // TODO: Set up for other media types, including audio, video, gifs? Look up their MIME types and figure out how to render them
+                    break;
+                default:
+
+            }
+            cursor.close();
+        }
+        return "Uhm.";
+    }
+
+
+    // TODO: Don't know if this is necessary, but this is for if there is no mms text in cursor
+    public static String getMmsText(Context context, String _id) {
+        Uri partUri = Uri.parse("content://mms/part" + _id);
+        InputStream is = null;
+        StringBuilder sb = new StringBuilder();
+        try {
+            is = context.getContentResolver().openInputStream(partUri);
+            if (is != null) {
+                InputStreamReader isr = new InputStreamReader(is, "UTF-8");
+                BufferedReader br = new BufferedReader(isr);
+                String temp = br.readLine();
+                while (temp != null) {
+                    sb.append(temp);
+                    temp = br.readLine();
+                }
+            }
+        } catch (IOException e) {
+
+        } finally {
+            if (is != null) {
+                try {
+                    is.close();
+                } catch (IOException e) {
+
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    // TODO: Implement
+    public static Bitmap getMmsImage(Context context, String _id) {
+        return null;
     }
 
     /**

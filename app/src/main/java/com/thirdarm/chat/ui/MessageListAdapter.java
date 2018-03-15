@@ -93,7 +93,7 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 errorCode, locked, personSenderId, protocolId, read, seen, serviceCenter,
                 subject, threadId, type);
 
-        // if the mesasge was in the outbox, then the user is the sender
+        // if the message was in the outbox, then the user is the sender
         if (type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_OUTBOX ||
                 type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_SENT) {
             body = "You: " + body;
@@ -164,6 +164,8 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         MmsSmsHelper.getAddressFromMms(mContext, baseColumnId, holder,
                 true, false);
 
+        String body = MmsSmsHelper.getMmsData(mContext, baseColumnId, messageBox);
+
         MmsObject mmsObject = new MmsObject(contentClass, contentLocation, contentType, creator,
                 dateReceived, dateSent, expiryTime, locked, messageBox, messageClass, messageId,
                 messageSize, typeMessage, mmsVersion, priority, read, seen, status, subject,
@@ -173,7 +175,7 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 mmsObject,
                 initials,
                 "",
-                contentType,
+                body,
                 Utils.convertMillisToReadableDateTime(
                         mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
         );
