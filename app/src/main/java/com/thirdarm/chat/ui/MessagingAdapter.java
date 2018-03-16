@@ -2,6 +2,7 @@ package com.thirdarm.chat.ui;
 
 import android.content.Context;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.provider.Telephony;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -41,7 +42,7 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
     public void onBindViewHolder(MessagingVH holder, int position) {
         if (mCursor.moveToPosition(position)) {
             String messageType =
-                    mCursor.getString(mCursor.getColumnIndex("m_type"));
+                    mCursor.getString(mCursor.getColumnIndex("ct_t"));
             if ("application/vnd.wap.multipart.related".equals(messageType)) {
                 // message is MMS
                 bindMMSView(holder, position);
@@ -54,12 +55,41 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
 
     // TODO: Set MMS content
     private void bindMMSView(MessagingVH holder, int position) {
-        String senderName = "WAAHAHAHAHA";
         String time =
                 Utils.convertMillisToReadableDateTime(mCursor.getLong(mCursor.getColumnIndex("normalized_date")));
-        String body = "WAHAHAHAHA";
 
-        holder.bindMms(senderName, time, body, -1);
+        String baseColumnId = mCursor.getString(mCursor.getColumnIndex("_id"));
+        int messageBox = mCursor.getInt(mCursor.getColumnIndex("msg_box"));
+
+        // getting mms content
+        Cursor mmsCursor = MmsSmsHelper.getMmsMessageCursor(mContext, baseColumnId);
+        String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursor(mmsCursor);
+        String body = null;
+        Bitmap image = null;
+        switch (mimeType) {
+            case "text/plain":
+                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor);
+                break;
+            case "image/jpeg":
+            case "image/bmp":
+            case "image.gif":
+            case "image/jpg":
+            case "image/png":
+                // TODO: This is leaking to other views. Why?
+                // TODO: Set an onClickListener to expand image preview when user clicks on image
+                image = MmsSmsHelper.getMmsImageFromMmsCursor(mmsCursor, mContext);
+                break;
+            case "application/smil":
+                // TODO: Deal with this somehow. Create an SMIL container?
+            default:
+                body = mimeType;
+        }
+        mmsCursor.close();
+
+        // Prepending the sender address
+        String senderAddress = MmsSmsHelper.getSenderAddressFromMms(mContext, baseColumnId, messageBox);
+
+        holder.bindMms(senderAddress, time, body, image);
     }
 
     // TODO: Set HTML compat for clicking hyperlinks
@@ -118,6 +148,8 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
         }
 
         public void bindSms(String senderName, String time, String body) {
+            clearAllFields();
+
             tv_name.setText(senderName);
             tv_time.setText(time);
             tv_body.setText(body);
@@ -125,12 +157,16 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
             itemView.setTag(SMS_TAG);
         }
 
-        public void bindMms(String senderName, String time, String body, int imageId) {
+        public void bindMms(String senderName, String time, String body, Bitmap imageId) {
+            clearAllFields();
+
             tv_name.setText(senderName);
             tv_time.setText(time);
             tv_body.setText(body);
 
-            //iv_image.setImageResource(imageId);
+            if (imageId != null) {
+                iv_image.setImageBitmap(imageId);
+            }
 
             itemView.setTag(MMS_TAG);
         }
@@ -138,6 +174,13 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
         @Override
         public void returnReadableAddress(String result) {
             tv_name.setText(result);
+        }
+
+        private void clearAllFields() {
+            tv_name.setText(null);
+            tv_time.setText(null);
+            tv_body.setText(null);
+            iv_image.setImageBitmap(null);
         }
     }
 }

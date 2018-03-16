@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:padding="8dp"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="8dp">
 
     <TextView
         android:id="@+id/message_item_sender_name_textview"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        tools:text="Sender name"/>
+        tools:text="Sender name" />
 
     <TextView
         android:id="@+id/message_item_time_textview"
@@ -21,13 +21,15 @@
         android:id="@+id/message_item_image"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:contentDescription="A picture message"/>
+        android:adjustViewBounds="true"
+        android:contentDescription="A picture message"
+        android:maxHeight="128dp" />
 
     <TextView
         android:id="@+id/message_item_body_textview"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textIsSelectable="true"
-        tools:text="This is the body of the message"/>
+        tools:text="This is the body of the message" />
 
 </LinearLayout>

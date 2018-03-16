@@ -122,10 +122,10 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         String creator = null;
         long dateReceived =
                 mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_RECEIVED) *
-                MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
+                        MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
         long dateSent =
                 mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_SENT) *
-                MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
+                        MmsSmsHelper.DATE_NORMALIZER_CONSTANT;
         long expiryTime =
                 mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_EXPIRY);
         boolean locked =
@@ -164,7 +164,29 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         MmsSmsHelper.getAddressFromMms(mContext, baseColumnId, holder,
                 true, false);
 
-        String body = MmsSmsHelper.getMmsData(mContext, baseColumnId, messageBox);
+        // getting mms content
+        Cursor mmsCursor = MmsSmsHelper.getMmsMessageCursor(mContext, baseColumnId);
+        String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursor(mmsCursor);
+        String body;
+        switch (mimeType) {
+            case "text/plain":
+                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor);
+                break;
+            case "image/jpeg":
+            case "image/bmp":
+            case "image.gif":
+            case "image/jpg":
+            case "image/png":
+                body = "Image";
+                break;
+            default:
+                throw new UnsupportedOperationException("mimetype not defined! type: " + mimeType);
+        }
+        mmsCursor.close();
+
+        // Prepending the sender address
+        String senderAddress = MmsSmsHelper.getSenderAddressFromMms(mContext, baseColumnId, messageBox);
+        body = String.format("%s: %s", senderAddress, body);
 
         MmsObject mmsObject = new MmsObject(contentClass, contentLocation, contentType, creator,
                 dateReceived, dateSent, expiryTime, locked, messageBox, messageClass, messageId,

@@ -2,6 +2,7 @@ package com.thirdarm.chat;
 
 import android.Manifest;
 import android.content.ContentUris;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -23,14 +24,17 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.ui.MessagingAdapter;
 import com.thirdarm.chat.utils.Utils;
 
-public class MessagingFragment extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
+public class MessagingFragment extends Fragment
+        implements LoaderManager.LoaderCallbacks<Cursor>, MmsSmsHelper.MessageDeliveryCallbacks {
 
     private static final String LOG_TAG = MessagingFragment.class.getSimpleName();
 
@@ -89,7 +93,7 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
 
 
         // set-up outgoing message container
-        // TODO: Implement outgoing message functionality
+        // TODO: Implement MMS outgoing message functionality, and for multiple outgoing addresses
 
         mEt_messageOutgoing = (EditText) view.findViewById(R.id.messaging_message_edittext);
 
@@ -99,7 +103,7 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
             public void onClick(View view) {
                 mMessageOutgoing = mEt_messageOutgoing.getText().toString();
 
-                if (checkIfNumberMessageEmpty("", mMessageOutgoing)) {
+                if (checkIfNumberMessageEmpty(mAddressNumbersOutgoing[0], mMessageOutgoing)) {
                     sendSMSTextMessage();
                 }
             }
@@ -124,6 +128,8 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
         });
         enableDisableSendButton(mEt_messageOutgoing.getText());
 
+        // TODO: slide the recycler view upwards by keyboard height when keyboard pops up
+
         return view;
     }
 
@@ -134,7 +140,8 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
                 // upon first granting of send permission
                 // TODO: Implement sendTextMessage()
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    MmsSmsHelper.sendTextMessage(getActivity(), null, mMessageOutgoing);
+                    MmsSmsHelper.sendTextMessage(getActivity(), mAddressNumbersOutgoing[0],
+                            mMessageOutgoing, this);
                 }
         }
     }
@@ -162,7 +169,8 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
     // TODO: Implement to support multiple outgoing addresses
     public void sendSMSTextMessage() {
         if (getPermissionToSendSMS()) {
-            MmsSmsHelper.sendTextMessage(getActivity(), null, mMessageOutgoing);
+            MmsSmsHelper.sendTextMessage(getActivity(), mAddressNumbersOutgoing[0],
+                    mMessageOutgoing, this);
         } else {
             // code is run in onRequestPermissionsResult
         }
@@ -208,6 +216,20 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
         }
     }
 
+    public void onMessageSent(int statusCode) {
+        switch (statusCode) {
+            case MmsSmsHelper.MESSAGE_DELIVERY_STATUS_SUCCESS:
+                Utils.showToast(getContext(), "Message Sent");
+                mEt_messageOutgoing.setText("");
+                InputMethodManager inputManager = (InputMethodManager) getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
+                inputManager.hideSoftInputFromWindow(getActivity().getCurrentFocus().getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+                break;
+            case MmsSmsHelper.MESSAGE_DELIVERY_STATUS_FAILURE:
+                Utils.showToast(getContext(), "There was an error sending your message");
+                break;
+        }
+    }
+
     @Override
     public Loader<Cursor> onCreateLoader(int id, Bundle args) {
         switch (id) {
@@ -223,7 +245,7 @@ public class MessagingFragment extends Fragment implements LoaderManager.LoaderC
                 return new CursorLoader(
                         getContext(),
                         messageThreadUri,
-                        new String[] {"normalized_date", "body", "address", "m_type", "person", "type"},
+                        new String[] {"normalized_date", "body", "address", "m_type", "person", "type", "msg_box", "_id", "ct_t"},
                         null,
                         null,
                         sortOrder

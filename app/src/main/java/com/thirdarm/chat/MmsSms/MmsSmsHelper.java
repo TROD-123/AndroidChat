@@ -5,6 +5,7 @@ import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.provider.ContactsContract;
@@ -26,6 +27,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -266,66 +268,170 @@ public final class MmsSmsHelper {
         }
     }
 
-    // TODO: Need to split into separate methods based on MIMEtype
-    public static String getMmsData(Context context, String id, int messagebox) {
-        String[] addresses = getAddressFromMms(context, id, null, false, true);
-        String address = "";
-        if (addresses != null && addresses.length > 0) {
-            address = getReadableAddressString(context, new String[]{addresses[0]}, null, true);
-        }
+    /**
+     * Returns a cursor for the associated mms message id
+     * @param context
+     * @param msg_id The message id, equivalent to _id from mms-sms/conversations
+     * @return
+     */
+    public static Cursor getMmsMessageCursor(Context context, String msg_id) {
         Uri lookupUri = Uri.parse("content://mms/part");
         String selection = Telephony.Mms.Part.MSG_ID + " = ? ";
-        String[] selectionArgs = new String[]{id};
-        Cursor cursor = context.getContentResolver().query(
+        String[] selectionArgs = new String[]{msg_id};
+        return context.getContentResolver().query(
                 lookupUri,
                 null,
                 selection,
                 selectionArgs,
                 null
         );
-        if (cursor != null && cursor.moveToFirst()) {
-            String partId = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._ID));
-            String type = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
-
-            switch (type) {
-                // use MIME type to check for desired format
-                case "text/plain":
-                    // type is text
-                    String data = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._DATA));
-                    String body;
-                    if (data != null) {
-                        // TODO: don't know what this is for
-                        body = "There is text"; //getMmsText(context, partId);
-                    } else {
-                        // text is stored in cursor. access it directly
-                        if (messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_OUTBOX ||
-                                messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_SENT) {
-                            // Append "You" if user is the sender. Otherwise, append the address (sender address is the first address in array)
-                            body = "You: ";
-                        } else {
-                            body = address + ": ";
-                        }
-                        body += cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.TEXT));
-                    }
-                    return body;
-                case "image/jpeg":
-                case "image/bmp":
-                case "image.gif":
-                case "image/jpg":
-                case "image/png":
-                    // type is image
-                    //Bitmap bitmap = getMmsImage(partId);
-                    return "Image";
-                case "audio":
-                    // TODO: Set up for other media types, including audio, video, gifs? Look up their MIME types and figure out how to render them
-                    break;
-                default:
-
-            }
-            cursor.close();
-        }
-        return "Uhm.";
     }
+
+    /**
+     * Retrieves the mimetype of a mms cursor. Throws an exception if the cursor is empty
+     * @param mmsMessageCursor
+     * @return
+     */
+    public static String getMimeTypeFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
+        if (mmsMessageCursor.moveToFirst()) {
+            return mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
+        } else {
+            throw new UnsupportedOperationException("The passed cursor is empty.");
+        }
+    }
+
+    /**
+     * Retrieves text from a mms cursor. Throws an exception if cursor mimetype is not "text/plain", or if cursor is empty
+     * @param mmsMessageCursor
+     * @return
+     */
+    public static String getMmsTextFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
+        String type = getMimeTypeFromMmsCursor(mmsMessageCursor);
+        if (type != null && type.equals("text/plain")) {
+            String data = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._DATA));
+            String body;
+            if (data != null) {
+                // TODO: don't know what this is for
+                body = "There is text"; //getMmsText(context, partId);
+            } else {
+                // text is stored in cursor. access it directly
+                body = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.TEXT));
+            }
+            return body;
+        } else if (type == null) {
+            throw new UnsupportedOperationException("There is no mimetype available in the cursor.");
+        } else {
+            throw new UnsupportedOperationException("The mimetype of the passed cursor is not \"text/plain\".");
+        }
+    }
+
+    /**
+     * Retrieves the bitmap resource from a mms cursor. Throws an exception if cursor mimetype is not image supported, or if cursor is empty
+     * @param mmsMessageCursor
+     * @param context
+     * @return
+     */
+    public static Bitmap getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context) {
+        String type = getMimeTypeFromMmsCursor(mmsMessageCursor);
+        String[] imageTypes = new String[] {"image/jpeg", "image/bmp", "image.gif", "image/jpg", "image/png"};
+        String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
+        if (Arrays.asList(imageTypes).contains(type)) {
+            return getMmsImage(context, partId);
+        } else {
+            throw new UnsupportedOperationException("The mimetype of the passed cursor is not image-supported.");
+        }
+    }
+
+    /**
+     * Returns true if mms is sent by the user
+     * @param messageBox
+     * @return
+     */
+    public static boolean checkIfMmsIsFromUser(int messageBox) {
+        return messageBox == Telephony.BaseMmsColumns.MESSAGE_BOX_OUTBOX ||
+                messageBox == Telephony.BaseMmsColumns.MESSAGE_BOX_SENT;
+    }
+
+    /**
+     * Gets the name of the sender of mms. Returns "You" if user is the sender
+     * @param context
+     * @param msg_id
+     * @param messageBox
+     * @return
+     */
+    public static String getSenderAddressFromMms(Context context, String msg_id, int messageBox) {
+        if (checkIfMmsIsFromUser(messageBox)) {
+            return "You";
+        } else {
+            String[] addresses = getAddressFromMms(context, msg_id, null, false, true);
+            String address = "";
+            if (addresses != null && addresses.length > 0) {
+                address = getReadableAddressString(context, new String[]{addresses[0]}, null, true);
+            }
+            return address;
+        }
+    }
+
+    // TODO: Need to split into separate methods based on MIMEtype
+//    public static String getMmsData(Context context, String id, int messagebox) {
+//        String[] addresses = getAddressFromMms(context, id, null, false, true);
+//        String address = "";
+//        if (addresses != null && addresses.length > 0) {
+//            address = getReadableAddressString(context, new String[]{addresses[0]}, null, true);
+//        }
+//        Uri lookupUri = Uri.parse("content://mms/part");
+//        String selection = Telephony.Mms.Part.MSG_ID + " = ? ";
+//        String[] selectionArgs = new String[]{id};
+//        Cursor cursor = context.getContentResolver().query(
+//                lookupUri,
+//                null,
+//                selection,
+//                selectionArgs,
+//                null
+//        );
+//        if (cursor != null && cursor.moveToFirst()) {
+//            String partId = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._ID));
+//            String type = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
+//
+//            switch (type) {
+//                // use MIME type to check for desired format
+//                case "text/plain":
+//                    // type is text
+//                    String data = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._DATA));
+//                    String body;
+//                    if (data != null) {
+//                        // TODO: don't know what this is for
+//                        body = "There is text"; //getMmsText(context, partId);
+//                    } else {
+//                        // text is stored in cursor. access it directly
+//                        if (messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_OUTBOX ||
+//                                messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_SENT) {
+//                            // Append "You" if user is the sender. Otherwise, append the address (sender address is the first address in array)
+//                            body = "You: ";
+//                        } else {
+//                            body = address + ": ";
+//                        }
+//                        body += cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.TEXT));
+//                    }
+//                    return body;
+//                case "image/jpeg":
+//                case "image/bmp":
+//                case "image.gif":
+//                case "image/jpg":
+//                case "image/png":
+//                    // type is image
+//                    //Bitmap bitmap = getMmsImage(partId);
+//                    return "Image";
+//                case "audio":
+//                    // TODO: Set up for other media types, including audio, video, gifs? Look up their MIME types and figure out how to render them
+//                    break;
+//                default:
+//
+//            }
+//            cursor.close();
+//        }
+//        return "Uhm.";
+//    }
 
 
     // TODO: Don't know if this is necessary, but this is for if there is no mms text in cursor
@@ -358,9 +464,26 @@ public final class MmsSmsHelper {
         return sb.toString();
     }
 
-    // TODO: Implement
+    //
     public static Bitmap getMmsImage(Context context, String _id) {
-        return null;
+        Uri partUri = Uri.parse("content://mms/part/" + _id);
+        InputStream is = null;
+        Bitmap bitmap = null;
+        try {
+            is = context.getContentResolver().openInputStream(partUri);
+            bitmap = BitmapFactory.decodeStream(is);
+        } catch (IOException e) {
+
+        } finally {
+            if (is != null) {
+                try {
+                    is.close();
+                } catch (IOException e) {
+
+                }
+            }
+        }
+        return bitmap;
     }
 
     /**
