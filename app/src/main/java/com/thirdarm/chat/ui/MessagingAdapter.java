@@ -15,6 +15,9 @@ import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.R;
 import com.thirdarm.chat.utils.Utils;
 
+import pl.droidsonroids.gif.GifDrawable;
+import pl.droidsonroids.gif.GifImageView;
+
 /**
  * Created by TROD on 20180310.
  */
@@ -63,33 +66,41 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
 
         // getting mms content
         Cursor mmsCursor = MmsSmsHelper.getMmsMessageCursor(mContext, baseColumnId);
-        String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursor(mmsCursor);
+        String[] mimeTypes = MmsSmsHelper.getAllMimeTypesFromMmsCursor(mmsCursor);
         String body = null;
         Bitmap image = null;
-        switch (mimeType) {
-            case "text/plain":
-                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor);
-                break;
-            case "image/jpeg":
-            case "image/bmp":
-            case "image.gif":
-            case "image/jpg":
-            case "image/png":
-                // TODO: This is leaking to other views. Why?
-                // TODO: Set an onClickListener to expand image preview when user clicks on image
-                image = MmsSmsHelper.getMmsImageFromMmsCursor(mmsCursor, mContext);
-                break;
-            case "application/smil":
-                // TODO: Deal with this somehow. Create an SMIL container?
-            default:
-                body = mimeType;
+        GifDrawable gif = null;
+        for (int i = 0; i < mimeTypes.length; i++) {
+            // populate all content types if available
+            String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursorAtPosition(mmsCursor, i);
+
+            switch (mimeType) {
+                case "text/plain":
+                    body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor, i);
+                    break;
+                case "image/jpeg":
+                case "image/bmp":
+                case "image/jpg":
+                case "image/png":
+                    // TODO: This is leaking to other views. Why?
+                    // TODO: Set an onClickListener to expand image preview when user clicks on image
+                    image = MmsSmsHelper.getMmsImageFromMmsCursor(mmsCursor, mContext, i);
+                    break;
+                case "image/gif":
+                    gif = MmsSmsHelper.getMmsGifFromMmsCursor(mmsCursor, mContext, i);
+                    break;
+                case "application/smil":
+                    // TODO: Deal with this somehow. Create an SMIL container?
+                default:
+                    body = mimeType;
+            }
         }
         mmsCursor.close();
 
         // Prepending the sender address
         String senderAddress = MmsSmsHelper.getSenderAddressFromMms(mContext, baseColumnId, messageBox);
 
-        holder.bindMms(senderAddress, time, body, image);
+        holder.bindMms(senderAddress, time, body, image, gif);
     }
 
     // TODO: Set HTML compat for clicking hyperlinks
@@ -137,6 +148,7 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
         private TextView tv_time;
         private TextView tv_body;
         private ImageView iv_image;
+        private GifImageView giv_gif;
 
         public MessagingVH(View itemView) {
             super(itemView);
@@ -145,6 +157,7 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
             tv_time = (TextView) itemView.findViewById(R.id.message_item_time_textview);
             tv_body = (TextView) itemView.findViewById(R.id.message_item_body_textview);
             iv_image = (ImageView) itemView.findViewById(R.id.message_item_image);
+            giv_gif = (GifImageView) itemView.findViewById(R.id.message_item_gif);
         }
 
         public void bindSms(String senderName, String time, String body) {
@@ -157,7 +170,7 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
             itemView.setTag(SMS_TAG);
         }
 
-        public void bindMms(String senderName, String time, String body, Bitmap imageId) {
+        public void bindMms(String senderName, String time, String body, Bitmap imageId, GifDrawable gif) {
             clearAllFields();
 
             tv_name.setText(senderName);
@@ -166,6 +179,9 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
 
             if (imageId != null) {
                 iv_image.setImageBitmap(imageId);
+            }
+            if (gif != null) {
+                giv_gif.setBackground(gif);
             }
 
             itemView.setTag(MMS_TAG);
@@ -181,6 +197,7 @@ public class MessagingAdapter extends RecyclerView.Adapter<MessagingAdapter.Mess
             tv_time.setText(null);
             tv_body.setText(null);
             iv_image.setImageBitmap(null);
+            giv_gif.setBackground(null);
         }
     }
 }

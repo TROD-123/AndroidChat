@@ -1,7 +1,6 @@
 package com.thirdarm.chat.MmsSms;
 
 import android.content.ContentResolver;
-import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -15,7 +14,6 @@ import android.support.annotation.Nullable;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
@@ -30,6 +28,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+
+import pl.droidsonroids.gif.GifDrawable;
 
 /**
  * Helper class for MmsSms handling
@@ -288,13 +288,32 @@ public final class MmsSmsHelper {
     }
 
     /**
-     * Retrieves the mimetype of a mms cursor. Throws an exception if the cursor is empty
+     * Retrieves the mimetype of a mms cursor at a specific position. Throws an exception if the cursor is empty
      * @param mmsMessageCursor
      * @return
      */
-    public static String getMimeTypeFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
-        if (mmsMessageCursor.moveToFirst()) {
+    public static String getMimeTypeFromMmsCursorAtPosition(@NonNull Cursor mmsMessageCursor, int position) {
+        if (mmsMessageCursor.moveToPosition(position)) {
             return mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
+        } else {
+            throw new UnsupportedOperationException("The passed cursor is empty.");
+        }
+    }
+
+    /**
+     * Mms cursors may contain multiple mimeType components. Extracts all of them
+     * @param mmsMessageCursor
+     * @return
+     */
+    public static String[] getAllMimeTypesFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
+        List<String> mimeTypes = new ArrayList<>();
+        while (mmsMessageCursor.moveToNext()) {
+            String id = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms._ID));
+            String mimeType = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
+            mimeTypes.add(mimeType);
+        }
+        if (mimeTypes.size() > 0) {
+            return mimeTypes.toArray(new String[]{});
         } else {
             throw new UnsupportedOperationException("The passed cursor is empty.");
         }
@@ -305,8 +324,8 @@ public final class MmsSmsHelper {
      * @param mmsMessageCursor
      * @return
      */
-    public static String getMmsTextFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
-        String type = getMimeTypeFromMmsCursor(mmsMessageCursor);
+    public static String getMmsTextFromMmsCursor(@NonNull Cursor mmsMessageCursor, int position) {
+        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
         if (type != null && type.equals("text/plain")) {
             String data = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._DATA));
             String body;
@@ -331,9 +350,9 @@ public final class MmsSmsHelper {
      * @param context
      * @return
      */
-    public static Bitmap getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context) {
-        String type = getMimeTypeFromMmsCursor(mmsMessageCursor);
-        String[] imageTypes = new String[] {"image/jpeg", "image/bmp", "image.gif", "image/jpg", "image/png"};
+    public static Bitmap getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
+        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
+        String[] imageTypes = new String[] {"image/jpeg", "image/bmp", "image/jpg", "image/png"};
         String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
         if (Arrays.asList(imageTypes).contains(type)) {
             return getMmsImage(context, partId);
@@ -341,6 +360,22 @@ public final class MmsSmsHelper {
             throw new UnsupportedOperationException("The mimetype of the passed cursor is not image-supported.");
         }
     }
+
+    /**
+     * Retrieves the gif resource from a mms cursor. Throws an exception if cursor mimetype is not gif supported, or if cursor is empty
+     * @param mmsMessageCursor
+     * @param context
+     * @param position
+     * @return
+     */
+    public static GifDrawable getMmsGifFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
+        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
+        String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
+        if ("image/gif".equals(type)) {
+            return getMmsGif(context, partId);
+        } else {
+            throw new UnsupportedOperationException("The mimetype of the passed cursor is not gif-supported.");
+        }    }
 
     /**
      * Returns true if mms is sent by the user
@@ -372,68 +407,6 @@ public final class MmsSmsHelper {
         }
     }
 
-    // TODO: Need to split into separate methods based on MIMEtype
-//    public static String getMmsData(Context context, String id, int messagebox) {
-//        String[] addresses = getAddressFromMms(context, id, null, false, true);
-//        String address = "";
-//        if (addresses != null && addresses.length > 0) {
-//            address = getReadableAddressString(context, new String[]{addresses[0]}, null, true);
-//        }
-//        Uri lookupUri = Uri.parse("content://mms/part");
-//        String selection = Telephony.Mms.Part.MSG_ID + " = ? ";
-//        String[] selectionArgs = new String[]{id};
-//        Cursor cursor = context.getContentResolver().query(
-//                lookupUri,
-//                null,
-//                selection,
-//                selectionArgs,
-//                null
-//        );
-//        if (cursor != null && cursor.moveToFirst()) {
-//            String partId = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._ID));
-//            String type = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
-//
-//            switch (type) {
-//                // use MIME type to check for desired format
-//                case "text/plain":
-//                    // type is text
-//                    String data = cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part._DATA));
-//                    String body;
-//                    if (data != null) {
-//                        // TODO: don't know what this is for
-//                        body = "There is text"; //getMmsText(context, partId);
-//                    } else {
-//                        // text is stored in cursor. access it directly
-//                        if (messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_OUTBOX ||
-//                                messagebox == Telephony.BaseMmsColumns.MESSAGE_BOX_SENT) {
-//                            // Append "You" if user is the sender. Otherwise, append the address (sender address is the first address in array)
-//                            body = "You: ";
-//                        } else {
-//                            body = address + ": ";
-//                        }
-//                        body += cursor.getString(cursor.getColumnIndex(Telephony.Mms.Part.TEXT));
-//                    }
-//                    return body;
-//                case "image/jpeg":
-//                case "image/bmp":
-//                case "image.gif":
-//                case "image/jpg":
-//                case "image/png":
-//                    // type is image
-//                    //Bitmap bitmap = getMmsImage(partId);
-//                    return "Image";
-//                case "audio":
-//                    // TODO: Set up for other media types, including audio, video, gifs? Look up their MIME types and figure out how to render them
-//                    break;
-//                default:
-//
-//            }
-//            cursor.close();
-//        }
-//        return "Uhm.";
-//    }
-
-
     // TODO: Don't know if this is necessary, but this is for if there is no mms text in cursor
     public static String getMmsText(Context context, String _id) {
         Uri partUri = Uri.parse("content://mms/part" + _id);
@@ -464,7 +437,12 @@ public final class MmsSmsHelper {
         return sb.toString();
     }
 
-    //
+    /**
+     * Grabs a bitmap via uri
+     * @param context
+     * @param _id
+     * @return
+     */
     public static Bitmap getMmsImage(Context context, String _id) {
         Uri partUri = Uri.parse("content://mms/part/" + _id);
         InputStream is = null;
@@ -484,6 +462,24 @@ public final class MmsSmsHelper {
             }
         }
         return bitmap;
+    }
+
+    /**
+     * Grabs a gif drawable via uri
+     * @param context
+     * @param _id
+     * @return
+     */
+    public static GifDrawable getMmsGif(Context context, String _id) {
+        Uri partUri = Uri.parse("content://mms/part/" + _id);
+        ContentResolver cr = context.getContentResolver();
+        GifDrawable gif = null;
+        try {
+            gif = new GifDrawable(cr, partUri);
+        } catch (IOException e) {
+
+        }
+        return gif;
     }
 
     /**

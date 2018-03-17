@@ -9,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-import com.thirdarm.chat.MessageListFragment;
 import com.thirdarm.chat.MmsSms.MmsObject;
 import com.thirdarm.chat.MmsSms.MmsSmsColumns;
 import com.thirdarm.chat.R;
@@ -166,18 +165,23 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
 
         // getting mms content
         Cursor mmsCursor = MmsSmsHelper.getMmsMessageCursor(mContext, baseColumnId);
-        String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursor(mmsCursor);
+        String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursorAtPosition(mmsCursor, 0); // in the message list, only show the first mimetype content as preview
         String body;
         switch (mimeType) {
             case "text/plain":
-                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor);
+                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor, 0);
                 break;
             case "image/jpeg":
             case "image/bmp":
-            case "image.gif":
             case "image/jpg":
             case "image/png":
-                body = "Image";
+                body = "sent you an image";
+                break;
+            case "image/gif":
+                body = "sent you a gif";
+                break;
+            case "application/smil":
+                body = "smil";
                 break;
             default:
                 throw new UnsupportedOperationException("mimetype not defined! type: " + mimeType);
