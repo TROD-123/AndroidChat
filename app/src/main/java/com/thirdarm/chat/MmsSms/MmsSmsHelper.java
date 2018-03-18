@@ -102,6 +102,21 @@ public final class MmsSmsHelper {
     }
 
     /**
+     * Returns the given array with only unique address values
+     * @param addresses
+     * @return
+     */
+    public static String[] getUniqueAddressesFromArray(String[] addresses) {
+        List<String> uniqueAddresses = new ArrayList<>();
+        for (String address : addresses) {
+            if (!uniqueAddresses.contains(address)) {
+                uniqueAddresses.add(address);
+            }
+        }
+        return uniqueAddresses.toArray(new String[]{});
+    }
+
+    /**
      * Converts an array of phone number address strings into the associated contact names, if available in Contacts. If a contact does not exist, the phone number is provided instead
      * <p>
      * Note this runs on a separate thread, and your class must implement the ReadableAddressCallback for results to be properly returned
@@ -112,6 +127,7 @@ public final class MmsSmsHelper {
      * @return
      */
     public static String getReadableAddressString(@NonNull Context context, @NonNull String[] addresses, @Nullable ReadableAddressCallback callback, boolean runOnMainThread) {
+        addresses = getUniqueAddressesFromArray(addresses);
         ReadableAddressCursor cursor = new ReadableAddressCursor(addresses, callback);
         if (runOnMainThread) {
             return cursor.doInBackground(context);
@@ -345,37 +361,32 @@ public final class MmsSmsHelper {
     }
 
     /**
-     * Retrieves the bitmap resource from a mms cursor. Throws an exception if cursor mimetype is not image supported, or if cursor is empty
+     * Retrieves the image/gif Uri from a mms cursor. Throws an exception if cursor mimetype is not image supported, or if cursor is empty
      * @param mmsMessageCursor
      * @param context
      * @return
      */
-    public static Bitmap getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
+    public static Uri getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
         String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
-        String[] imageTypes = new String[] {"image/jpeg", "image/bmp", "image/jpg", "image/png"};
+        String[] imageTypes = new String[]{"image/jpeg", "image/bmp", "image/jpg", "image/png", "image/gif"};
         String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
         if (Arrays.asList(imageTypes).contains(type)) {
-            return getMmsImage(context, partId);
+            return Uri.parse("content://mms/part/" + partId);
         } else {
             throw new UnsupportedOperationException("The mimetype of the passed cursor is not image-supported.");
         }
     }
 
-    /**
-     * Retrieves the gif resource from a mms cursor. Throws an exception if cursor mimetype is not gif supported, or if cursor is empty
-     * @param mmsMessageCursor
-     * @param context
-     * @param position
-     * @return
-     */
-    public static GifDrawable getMmsGifFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
+    public static Uri getMmsVideoFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
         String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
+        String[] videoTypes = new String[]{"video/*", "video/mp4"};
         String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
-        if ("image/gif".equals(type)) {
-            return getMmsGif(context, partId);
+        if (Arrays.asList(videoTypes).contains(type)) {
+            return Uri.parse("content://mms/part/" + partId);
         } else {
-            throw new UnsupportedOperationException("The mimetype of the passed cursor is not gif-supported.");
-        }    }
+            throw new UnsupportedOperationException("The mimetype of the passed cursor is not video-supported.");
+        }
+    }
 
     /**
      * Returns true if mms is sent by the user
