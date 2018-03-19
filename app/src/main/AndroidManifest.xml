@@ -26,6 +26,16 @@
             </intent-filter>
         </activity>
 
+        <provider
+            android:name="android.support.v4.content.FileProvider"
+            android:authorities="com.thirdarm.chat.filesProvider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths"/>
+        </provider>
+
         <!-- All of the below must be defined for this app to be considered an "SMS App" by the system -->
 
         <!-- Activity that sends SMS and MMS messages, with an intent filter that allows other apps to use this app to send messages -->

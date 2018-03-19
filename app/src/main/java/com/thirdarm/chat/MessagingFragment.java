@@ -13,12 +13,12 @@ import android.os.Bundle;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.CursorLoader;
+import android.support.v4.content.FileProvider;
 import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -27,14 +27,17 @@ import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.ui.MessagingAdapter;
 import com.thirdarm.chat.utils.Utils;
 
+import java.io.File;
+
 public class MessagingFragment extends Fragment
-        implements LoaderManager.LoaderCallbacks<Cursor>, MmsSmsHelper.MessageDeliveryCallbacks {
+        implements LoaderManager.LoaderCallbacks<Cursor>,
+        MmsSmsHelper.MessageDeliveryCallbacks,
+        MessagingAdapter.MessagingAdapterMmsVCardOnClickHandler {
 
     private static final String LOG_TAG = MessagingFragment.class.getSimpleName();
 
@@ -61,7 +64,7 @@ public class MessagingFragment extends Fragment
         // set up recyclerview
 
         mRv_messages = (RecyclerView) view.findViewById(R.id.messaging_conversations_recyclerview);
-        mMessagingAdapter = new MessagingAdapter(getContext());
+        mMessagingAdapter = new MessagingAdapter(getContext(), this);
 
         mRv_messages.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.VERTICAL, false));
         mRv_messages.setAdapter(mMessagingAdapter);
@@ -134,6 +137,21 @@ public class MessagingFragment extends Fragment
     }
 
     @Override
+    public void onClick(String vCardRawData) {
+        // create temp file for vCardData
+        String path = MmsSmsHelper.writeVCardDataToFile(getContext(), vCardRawData);
+        if (path != null) {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            File file = new File(path);
+            intent.setDataAndType(FileProvider.getUriForFile(getContext(), "com.thirdarm.chat.filesProvider", file), "text/vcard");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } else {
+            Utils.showToast(getContext(), "There was an error saving the temp vCard data");
+        }
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
             case MmsSmsHelper.SEND_SMS_PERMISSIONS_REQUEST:
@@ -148,6 +166,7 @@ public class MessagingFragment extends Fragment
 
     /**
      * Helper method to start the loader and set the action bar title
+     *
      * @param bundle
      */
     private void initializeLoading(Bundle bundle) {
@@ -245,7 +264,7 @@ public class MessagingFragment extends Fragment
                 return new CursorLoader(
                         getContext(),
                         messageThreadUri,
-                        new String[] {"normalized_date", "body", "address", "m_type", "person", "type", "msg_box", "_id", "ct_t"},
+                        new String[]{"normalized_date", "body", "address", "m_type", "person", "type", "msg_box", "_id", "ct_t"},
                         null,
                         null,
                         sortOrder
@@ -253,7 +272,8 @@ public class MessagingFragment extends Fragment
 
             default:
                 throw new RuntimeException("Loader not implemented: " + id);
-        }    }
+        }
+    }
 
     @Override
     public void onLoadFinished(Loader<Cursor> loader, Cursor data) {

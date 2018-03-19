@@ -32,11 +32,30 @@
         android:adjustViewBounds="true"
         android:maxHeight="128dp" />
 
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <VideoView
+            android:id="@+id/message_item_vid"
+            android:layout_width="256dp"
+            android:layout_height="256dp" />
+
+        <ImageView
+            android:id="@+id/message_item_vid_img"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:background="@drawable/ic_play_circle_outline_white_24dp"/>
+
+    </FrameLayout>
+
     <TextView
         android:id="@+id/message_item_body_textview"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textIsSelectable="true"
+        android:autoLink="email|phone|web"
         tools:text="This is the body of the message" />
 
 </LinearLayout>

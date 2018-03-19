@@ -4,6 +4,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.provider.Telephony;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,8 @@ import com.thirdarm.chat.R;
 import com.thirdarm.chat.MmsSms.MmsSmsHelper;
 import com.thirdarm.chat.MmsSms.SmsObject;
 import com.thirdarm.chat.utils.Utils;
+
+import java.util.Arrays;
 
 /**
  * Created by TROD on 20180303.
@@ -53,6 +56,26 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         return new MessageListVH(view);
     }
 
+    @Override
+    public void onBindViewHolder(MessageListVH holder, int position) {
+        if (mCursor.moveToPosition(position)) {
+            String[] mmsTypes = new String[]{
+                    "application/vnd.wap.multipart.mixed",
+                    "application/vnd.wap.multipart.related"
+            };
+            String messageType =
+                    mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_CONTENT_TYPE);
+            if (Arrays.asList(mmsTypes).contains(messageType)) {
+                // message is MMS
+                // TODO: Figure out why null messageType can ALSO be MMS (from old MMS sent pre 2018)
+                bindMMSView(holder, position);
+            } else {
+                // message is SMS. Also, messageType is null by default for SMS
+                bindSMSView(holder, position);
+            }
+        }
+    }
+
     // TODO: Filter fields to what you actually need
     private void bindSMSView(MessageListVH holder, int position) {
         String initials = String.valueOf(position);
@@ -84,28 +107,33 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         int type =
                 mCursor.getInt(MmsSmsColumns.INDEX_MESSAGES_TYPE);
 
-        // This will be updated on item itself once data is available
-        MmsSmsHelper.getReadableAddressString(mContext, new String[]{address},
-                holder, false);
+        // if we erroneously came here, go to bindMMSView()
+        if (address == null || address.length() == 0) {
+            bindMMSView(holder, position);
+        } else {
+            // This will be updated on item itself once data is available
+            MmsSmsHelper.getReadableAddressString(mContext, new String[]{address},
+                    holder, false);
 
-        SmsObject smsObject = new SmsObject(address, body, creator, dateReceived, dateSent,
-                errorCode, locked, personSenderId, protocolId, read, seen, serviceCenter,
-                subject, threadId, type);
+            SmsObject smsObject = new SmsObject(address, body, creator, dateReceived, dateSent,
+                    errorCode, locked, personSenderId, protocolId, read, seen, serviceCenter,
+                    subject, threadId, type);
 
-        // if the message was in the outbox, then the user is the sender
-        if (type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_OUTBOX ||
-                type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_SENT) {
-            body = "You: " + body;
+            // if the message was in the outbox, then the user is the sender
+            if (type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_OUTBOX ||
+                    type == Telephony.TextBasedSmsColumns.MESSAGE_TYPE_SENT) {
+                body = "You: " + body;
+            }
+
+            holder.bindSms(
+                    smsObject,
+                    initials,
+                    address,
+                    body,
+                    Utils.convertMillisToReadableDateTime(
+                            mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
+            );
         }
-
-        holder.bindSms(
-                smsObject,
-                initials,
-                address,
-                body,
-                Utils.convertMillisToReadableDateTime(
-                        mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
-        );
     }
 
     // TODO: Filter fields to what you actually need
@@ -166,25 +194,34 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
         // getting mms content
         Cursor mmsCursor = MmsSmsHelper.getMmsMessageCursor(mContext, baseColumnId);
         String mimeType = MmsSmsHelper.getMimeTypeFromMmsCursorAtPosition(mmsCursor, 0); // in the message list, only show the first mimetype content as preview
+        int mimeTypeCategory = MmsSmsHelper.matchMimeType(mimeType);
+
         String body;
-        switch (mimeType) {
-            case "text/plain":
-                body = MmsSmsHelper.getMmsTextFromMmsCursor(mmsCursor, 0);
+
+        switch (mimeTypeCategory) {
+            case MmsSmsHelper.MIME_TYPE_TEXT_PLAIN:
+                String partId = mmsCursor.getString(mmsCursor.getColumnIndex(Telephony.Mms.Part._ID));
+                String data = mmsCursor.getString(mmsCursor.getColumnIndex(Telephony.Mms.Part._DATA));
+                String text = mmsCursor.getString(mmsCursor.getColumnIndex(Telephony.Mms.Part.TEXT));
+                body = MmsSmsHelper.getMmsText(mContext, text, data, partId);
                 break;
-            case "image/jpeg":
-            case "image/bmp":
-            case "image/jpg":
-            case "image/png":
+            case MmsSmsHelper.MIME_TYPE_TEXT_VCARD:
+                body = "sent you a contact";
+                break;
+            case MmsSmsHelper.MIME_TYPE_IMAGE:
                 body = "sent you an image";
                 break;
-            case "image/gif":
+            case MmsSmsHelper.MIME_TYPE_GIF:
                 body = "sent you a gif";
                 break;
-            case "application/smil":
-                body = "smil";
+            case MmsSmsHelper.MIME_TYPE_VIDEO:
+                body = "sent you a video";
                 break;
+            case MmsSmsHelper.MIME_TYPE_SMIL:
+                // TODO: Deal with this somehow. Create an SMIL container?
             default:
-                throw new UnsupportedOperationException("mimetype not defined! type: " + mimeType);
+                body = "Unhandled mimetype: " + mimeType;
+
         }
         mmsCursor.close();
 
@@ -205,22 +242,6 @@ public class MessageListAdapter extends RecyclerView.Adapter<MessageListAdapter.
                 Utils.convertMillisToReadableDateTime(
                         mCursor.getLong(MmsSmsColumns.INDEX_MESSAGES_DATE_NORMALIZED))
         );
-    }
-
-    @Override
-    public void onBindViewHolder(MessageListVH holder, int position) {
-
-        if (mCursor.moveToPosition(position)) {
-            String messageType =
-                    mCursor.getString(MmsSmsColumns.INDEX_MESSAGES_CONTENT_TYPE);
-            if ("application/vnd.wap.multipart.related".equals(messageType)) {
-                // message is MMS
-                bindMMSView(holder, position);
-            } else {
-                // message is SMS
-                bindSMSView(holder, position);
-            }
-        }
     }
 
     @Override

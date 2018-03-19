@@ -36,4 +36,10 @@ dependencies {
     implementation 'com.googlecode.libphonenumber:geocoder:1.7'
     // gif support
     implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.11'
+    // glide image loading
+    implementation ("com.github.bumptech.glide:glide:4.6.1") {
+        exclude group: "com.android.support"
+    }
+    // vcard parsing
+    implementation 'com.googlecode.ez-vcard:ez-vcard:0.10.3'
 }

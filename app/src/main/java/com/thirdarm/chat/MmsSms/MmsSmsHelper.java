@@ -20,6 +20,8 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -29,7 +31,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-import pl.droidsonroids.gif.GifDrawable;
+import ezvcard.Ezvcard;
+import ezvcard.VCard;
+import ezvcard.property.Telephone;
 
 /**
  * Helper class for MmsSms handling
@@ -58,6 +62,16 @@ public final class MmsSmsHelper {
 
     // default values
     public static final long DEFAULT_MESSAGING_THREAD_ID = -1L;
+
+    // mimetype targets
+    public static final int MIME_TYPE_UNDEFINED = -1;
+    public static final int MIME_TYPE_TEXT_PLAIN = 0;
+    public static final int MIME_TYPE_TEXT_VCARD = 1;
+    public static final int MIME_TYPE_IMAGE = 2;
+    public static final int MIME_TYPE_GIF = 3;
+    public static final int MIME_TYPE_VIDEO = 4;
+    public static final int MIME_TYPE_AUDIO = 5;
+    public static final int MIME_TYPE_SMIL = 6;
 
 
     private MmsSmsHelper() {
@@ -103,6 +117,7 @@ public final class MmsSmsHelper {
 
     /**
      * Returns the given array with only unique address values
+     *
      * @param addresses
      * @return
      */
@@ -286,8 +301,9 @@ public final class MmsSmsHelper {
 
     /**
      * Returns a cursor for the associated mms message id
+     *
      * @param context
-     * @param msg_id The message id, equivalent to _id from mms-sms/conversations
+     * @param msg_id  The message id, equivalent to _id from mms-sms/conversations
      * @return
      */
     public static Cursor getMmsMessageCursor(Context context, String msg_id) {
@@ -305,6 +321,7 @@ public final class MmsSmsHelper {
 
     /**
      * Retrieves the mimetype of a mms cursor at a specific position. Throws an exception if the cursor is empty
+     *
      * @param mmsMessageCursor
      * @return
      */
@@ -318,13 +335,13 @@ public final class MmsSmsHelper {
 
     /**
      * Mms cursors may contain multiple mimeType components. Extracts all of them
+     *
      * @param mmsMessageCursor
      * @return
      */
     public static String[] getAllMimeTypesFromMmsCursor(@NonNull Cursor mmsMessageCursor) {
         List<String> mimeTypes = new ArrayList<>();
         while (mmsMessageCursor.moveToNext()) {
-            String id = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms._ID));
             String mimeType = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.CONTENT_TYPE));
             mimeTypes.add(mimeType);
         }
@@ -336,60 +353,74 @@ public final class MmsSmsHelper {
     }
 
     /**
-     * Retrieves text from a mms cursor. Throws an exception if cursor mimetype is not "text/plain", or if cursor is empty
-     * @param mmsMessageCursor
+     * Matches string mimetype to category constants
+     *
+     * @param mimeType
      * @return
      */
-    public static String getMmsTextFromMmsCursor(@NonNull Cursor mmsMessageCursor, int position) {
-        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
-        if (type != null && type.equals("text/plain")) {
-            String data = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._DATA));
-            String body;
-            if (data != null) {
-                // TODO: don't know what this is for
-                body = "There is text"; //getMmsText(context, partId);
-            } else {
-                // text is stored in cursor. access it directly
-                body = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part.TEXT));
-            }
-            return body;
-        } else if (type == null) {
-            throw new UnsupportedOperationException("There is no mimetype available in the cursor.");
-        } else {
-            throw new UnsupportedOperationException("The mimetype of the passed cursor is not \"text/plain\".");
-        }
-    }
-
-    /**
-     * Retrieves the image/gif Uri from a mms cursor. Throws an exception if cursor mimetype is not image supported, or if cursor is empty
-     * @param mmsMessageCursor
-     * @param context
-     * @return
-     */
-    public static Uri getMmsImageFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
-        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
-        String[] imageTypes = new String[]{"image/jpeg", "image/bmp", "image/jpg", "image/png", "image/gif"};
-        String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
-        if (Arrays.asList(imageTypes).contains(type)) {
-            return Uri.parse("content://mms/part/" + partId);
-        } else {
-            throw new UnsupportedOperationException("The mimetype of the passed cursor is not image-supported.");
-        }
-    }
-
-    public static Uri getMmsVideoFromMmsCursor(@NonNull Cursor mmsMessageCursor, @NonNull Context context, int position) {
-        String type = getMimeTypeFromMmsCursorAtPosition(mmsMessageCursor, position);
+    public static int matchMimeType(@NonNull String mimeType) {
+        String[] plaintextTypes = new String[]{"text/plain"};
+        String[] vCardTypes = new String[]{"text/vCard", "text/x-vCard"};
+        String[] imageTypes = new String[]{"image/jpeg", "image/bmp", "image/jpg", "image/png"};
+        String[] gifTypes = new String[]{"image/gif"};
         String[] videoTypes = new String[]{"video/*", "video/mp4"};
-        String partId = mmsMessageCursor.getString(mmsMessageCursor.getColumnIndex(Telephony.Mms.Part._ID));
-        if (Arrays.asList(videoTypes).contains(type)) {
-            return Uri.parse("content://mms/part/" + partId);
+        String[] audioTypes = new String[]{"audio"};
+        String[] smil = new String[]{"application/smil"};
+
+        if (Arrays.asList(plaintextTypes).contains(mimeType)) {
+            return MIME_TYPE_TEXT_PLAIN;
+        } else if (Arrays.asList(vCardTypes).contains(mimeType)) {
+            return MIME_TYPE_TEXT_VCARD;
+        } else if (Arrays.asList(imageTypes).contains(mimeType)) {
+            return MIME_TYPE_IMAGE;
+        } else if (Arrays.asList(gifTypes).contains(mimeType)) {
+            return MIME_TYPE_GIF;
+        } else if (Arrays.asList(videoTypes).contains(mimeType)) {
+            return MIME_TYPE_VIDEO;
+        } else if (Arrays.asList(audioTypes).contains(mimeType)) {
+            return MIME_TYPE_AUDIO;
+        } else if (Arrays.asList(smil).contains(mimeType)) {
+            return MIME_TYPE_SMIL;
         } else {
-            throw new UnsupportedOperationException("The mimetype of the passed cursor is not video-supported.");
+            return MIME_TYPE_UNDEFINED;
         }
+    }
+
+    public static String getMmsText(@NonNull Context context, @NonNull String body,
+                                    String data, String partId) {
+        if (data != null) {
+            // TODO: Figure out what this is for
+            // for vCards...
+            return getMmsTextFromPartId(context, partId);
+        } else {
+            // body already has text. return it
+            return body;
+        }
+    }
+
+    public static VCard getVCardObject(@NonNull Context context, String data, String partId) {
+        if (data != null) {
+            return getVCardFromPartId(context, partId);
+        } else {
+            throw new UnsupportedOperationException("The vCard passed does not have data.");
+        }
+    }
+
+    public static String getVCardRawData(@NonNull Context context, String data, String partId) {
+        if (data != null) {
+            return getVCardStringFromPartId(context, partId);
+        } else {
+            throw new UnsupportedOperationException("The vCard passed does not have data.");
+        }
+    }
+
+    public static Uri getMmsImageVideoUri(String partId) {
+        return Uri.parse("content://mms/part/" + partId);
     }
 
     /**
      * Returns true if mms is sent by the user
+     *
      * @param messageBox
      * @return
      */
@@ -400,6 +431,7 @@ public final class MmsSmsHelper {
 
     /**
      * Gets the name of the sender of mms. Returns "You" if user is the sender
+     *
      * @param context
      * @param msg_id
      * @param messageBox
@@ -419,8 +451,8 @@ public final class MmsSmsHelper {
     }
 
     // TODO: Don't know if this is necessary, but this is for if there is no mms text in cursor
-    public static String getMmsText(Context context, String _id) {
-        Uri partUri = Uri.parse("content://mms/part" + _id);
+    private static String getMmsTextFromPartId(Context context, String _id) {
+        Uri partUri = Uri.parse("content://mms/part/" + _id);
         InputStream is = null;
         StringBuilder sb = new StringBuilder();
         try {
@@ -430,67 +462,67 @@ public final class MmsSmsHelper {
                 BufferedReader br = new BufferedReader(isr);
                 String temp = br.readLine();
                 while (temp != null) {
-                    sb.append(temp);
+                    sb.append(temp + "\r\n");
                     temp = br.readLine();
                 }
             }
         } catch (IOException e) {
-
+            e.printStackTrace();
         } finally {
             if (is != null) {
                 try {
                     is.close();
                 } catch (IOException e) {
-
+                    e.printStackTrace();
                 }
             }
         }
         return sb.toString();
     }
 
-    /**
-     * Grabs a bitmap via uri
-     * @param context
-     * @param _id
-     * @return
-     */
-    public static Bitmap getMmsImage(Context context, String _id) {
-        Uri partUri = Uri.parse("content://mms/part/" + _id);
-        InputStream is = null;
-        Bitmap bitmap = null;
-        try {
-            is = context.getContentResolver().openInputStream(partUri);
-            bitmap = BitmapFactory.decodeStream(is);
-        } catch (IOException e) {
-
-        } finally {
-            if (is != null) {
-                try {
-                    is.close();
-                } catch (IOException e) {
-
-                }
-            }
-        }
-        return bitmap;
+    public static VCard getVCardFromPartId(Context context, String _id) {
+        String vCardText = getMmsTextFromPartId(context, _id);
+        return Ezvcard.parse(vCardText).first();
     }
 
     /**
-     * Grabs a gif drawable via uri
+     * Creates a new file for the vCardRawData
      * @param context
-     * @param _id
-     * @return
+     * @param vCardRawData
+     * @return The path and filename of file output
      */
-    public static GifDrawable getMmsGif(Context context, String _id) {
-        Uri partUri = Uri.parse("content://mms/part/" + _id);
-        ContentResolver cr = context.getContentResolver();
-        GifDrawable gif = null;
+    public static String writeVCardDataToFile(Context context, String vCardRawData) {
+        String fileName = "temp_vcard.vcf";
+        // save to external files directory: /storage/emulated/0/Android/data/com.thirdarm.chat/files/
+        File file = new File(context.getExternalFilesDir(null), fileName);
+        FileOutputStream outputStream;
+//        VCardWriter vcw = null;
         try {
-            gif = new GifDrawable(cr, partUri);
+            outputStream = new FileOutputStream(file);
+            outputStream.write(vCardRawData.getBytes());
+            outputStream.close();
+//            vcw = new VCardWriter(file, VCardVersion.V4_0);
+//            vcw.write(vCard);
+            Log.d(LOG_TAG, "vCard path: " + file.getAbsolutePath());
+            return file.getAbsolutePath();
         } catch (IOException e) {
-
+            e.printStackTrace();
         }
-        return gif;
+        return null;
+    }
+
+    public static String getVCardStringFromPartId(Context context, String _id) {
+        return getMmsTextFromPartId(context, _id);
+    }
+
+    public static String getReadableVCardString(@NonNull VCard vCard) {
+        String fullName = vCard.getFormattedName().getValue();
+        List<Telephone> phoneNumbers = vCard.getTelephoneNumbers();
+        String phoneNumberMain = "";
+        if (phoneNumbers != null && phoneNumbers.size() > 0) {
+            phoneNumberMain = phoneNumbers.get(0).getText();
+        }
+        return String.format("%s: %s", fullName, phoneNumberMain);
     }
 
     /**
